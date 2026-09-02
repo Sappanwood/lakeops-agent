@@ -15,7 +15,7 @@ a proof of concept toward production.
 | User | Goal |
 |---|---|
 | Data platform engineer | Detect and diagnose pipeline, freshness, schema, and partition failures |
-| Network operations analyst | Ask operational questions without manually writing SQL |
+| Data operations analyst | Ask operational questions without manually writing SQL |
 | Technical decision-maker | Understand the deployment, security, cost, and production-readiness trade-offs |
 
 ## Primary demo scenario

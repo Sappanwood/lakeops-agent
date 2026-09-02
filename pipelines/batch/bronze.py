@@ -311,7 +311,18 @@ def _publish(
             hour_parent = bronze_parent / f"hour={logical_hour.hour:02d}"
             _ensure_directory(hour_parent, destination)
             final_run = hour_parent / f"run_id={run_id}"
-            final_run.mkdir()
+            try:
+                final_run.mkdir()
+            except FileExistsError as error:
+                raise BronzeIngestionError(
+                    "publication_conflict",
+                    f"bronze run directory already exists: {final_run}",
+                ) from error
+            except OSError as error:
+                raise BronzeIngestionError(
+                    "publication_failure",
+                    f"cannot create bronze run directory: {final_run}",
+                ) from error
             published_run_directories.append(final_run)
             try:
                 os.link(staged_object, final_run / staged_object.name)

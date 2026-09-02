@@ -26,6 +26,10 @@ GOLD_MANIFEST_SCHEMA = "lakeops/gold-project-traffic-manifest@1"
 FRESHNESS_MANIFEST_SCHEMA = "lakeops/gold-ingestion-freshness-manifest@1"
 RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 DUCKDB_MEMORY_LIMIT = "256MB"
+PROJECT_DAILY_KPI_ID = "kpi.project_daily_views"
+PROJECT_DAILY_KPI_UNIT = "views"
+PROJECT_DAILY_KPI_FORMULA = "sum(pageviews_hourly.view_count) by project_code and partition_date"
+PROJECT_DAILY_KPI_COMPLETENESS = "input_hour_count must equal 24"
 DUCKDB_TYPES = {
     "string": "VARCHAR",
     "integer": "BIGINT",
@@ -61,6 +65,7 @@ class _Contract:
     views: Mapping[str, Mapping[str, Any]]
     joins: Mapping[str, Mapping[str, Any]]
     daily_expected_hours: int
+    project_daily_kpi: Mapping[str, Any]
 
 
 @dataclass(frozen=True)
@@ -273,7 +278,25 @@ def _load_contract(catalog_path: Path) -> _Contract:
     required_views = {"v_project_traffic_daily", "v_page_activity_hourly", "v_page_traffic_activity", "v_ingestion_freshness", "v_pipeline_runs"}
     if set(views) != required_views:
         raise GoldMaterializationError("catalog_contract_failure", "query surface differs from the supported governed views")
-    return _Contract(metadata, datasets, views, joins, source["daily_batch"]["expected_hourly_files"])
+    project_daily_kpi = next((item for item in metadata["kpis"] if item["id"] == PROJECT_DAILY_KPI_ID), None)
+    if (
+        not isinstance(project_daily_kpi, Mapping)
+        or project_daily_kpi.get("unit") != PROJECT_DAILY_KPI_UNIT
+        or project_daily_kpi.get("formula") != PROJECT_DAILY_KPI_FORMULA
+        or project_daily_kpi.get("completeness") != PROJECT_DAILY_KPI_COMPLETENESS
+    ):
+        raise GoldMaterializationError(
+            "catalog_contract_failure",
+            "project daily views KPI differs from the supported aggregation contract",
+        )
+    return _Contract(
+        metadata,
+        datasets,
+        views,
+        joins,
+        source["daily_batch"]["expected_hourly_files"],
+        project_daily_kpi,
+    )
 
 
 def _load_accepted_silver(path: Path, destination: Path, contract: _Contract) -> _SilverInput:
@@ -372,7 +395,11 @@ def _publish_gold(destination: Path, run_id: str, silver: _SilverInput, contract
         "status": "accepted",
         "dataset_id": "project_traffic_daily",
         "partition_date": silver.partition_date,
-        "kpi": {"id": "kpi.project_daily_views", "unit": "views", "formula": _kpi_formula(contract, "kpi.project_daily_views")},
+        "kpi": {
+            "id": PROJECT_DAILY_KPI_ID,
+            "unit": contract.project_daily_kpi["unit"],
+            "formula": contract.project_daily_kpi["formula"],
+        },
         "freshness": {"definition": contract.datasets["project_traffic_daily"]["freshness"], "is_complete": True},
         "input_manifest": {"dataset_id": "pageviews_hourly", "manifest_id": silver.manifest_id, "path": silver.manifest_relative, "sha256": silver.manifest_sha256},
         "input_manifest_ids": [silver.manifest_id],

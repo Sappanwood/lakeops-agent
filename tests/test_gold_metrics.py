@@ -50,6 +50,30 @@ class _Response:
 class GoldMetricsTests(unittest.TestCase):
     now = staticmethod(lambda: datetime(2024, 1, 2, 3, 4, 5, tzinfo=UTC))
 
+    def test_catalog_kpi_formula_and_unit_drift_fail_closed(self) -> None:
+        catalog_source = Path(__file__).resolve().parents[1] / "data" / "catalog" / "catalog.json"
+        for field, value in (("formula", "avg(pageviews_hourly.view_count)"), ("unit", "bananas")):
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as temporary_directory:
+                root = Path(temporary_directory)
+                silver_manifest = self._daily_silver(root)
+                catalog = json.loads(catalog_source.read_text(encoding="utf-8"))
+                project_views = next(kpi for kpi in catalog["kpis"] if kpi["id"] == "kpi.project_daily_views")
+                project_views[field] = value
+                catalog_path = root / "catalog.json"
+                catalog_path.write_text(json.dumps(catalog), encoding="utf-8")
+
+                with self.assertRaises(GoldMaterializationError) as raised:
+                    materialize_project_traffic_daily(
+                        silver_manifest,
+                        root,
+                        run_id=f"gold-kpi-{field}",
+                        catalog_path=catalog_path,
+                        now=self.now,
+                    )
+
+                self.assertEqual(raised.exception.code, "catalog_contract_failure")
+                self.assertFalse((root / "gold").exists())
+
     def test_daily_gold_metrics_and_catalog_governed_views_are_deterministic(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

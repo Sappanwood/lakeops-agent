@@ -385,6 +385,33 @@ class BronzePageviewsTest(unittest.TestCase):
             self.assertEqual(list((destination / "bronze").rglob("run_id=*")), [])
             self.assertEqual(list((destination / "bronze").rglob("*.gz")), [])
 
+    def test_later_hour_directory_conflict_cleans_only_owned_publication(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            destination = Path(temporary_directory) / "bronze-output"
+            bronze_parent = destination / "bronze" / "pageviews" / "partition_date=2024-01-01"
+            conflicting_run = bronze_parent / "hour=01" / "run_id=directory-conflict"
+            conflicting_run.mkdir(parents=True)
+            sentinel = conflicting_run / "preexisting.txt"
+            sentinel.write_text("keep", encoding="utf-8")
+
+            with self.assertRaises(BronzeIngestionError) as raised:
+                ingest_pageviews(
+                    self.partition_date,
+                    "demo",
+                    destination,
+                    downloader=self._valid_downloader(),
+                    run_id="directory-conflict",
+                    now=self.now,
+                )
+
+            self.assertEqual(raised.exception.code, "publication_conflict")
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "keep")
+            self.assertFalse((bronze_parent / "hour=00" / "run_id=directory-conflict").exists())
+            self.assertFalse((bronze_parent / ".runs" / "run_id=directory-conflict").exists())
+            self.assertFalse(
+                (destination / "manifests" / "pageviews_hourly" / "partition_date=2024-01-01" / "directory-conflict.json").exists()
+            )
+
     @staticmethod
     def _valid_gzip() -> bytes:
         return gzip.compress(b"en LakeOps_Agent 101 4097\n", mtime=0)
