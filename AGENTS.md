@@ -5,6 +5,14 @@ Read [README.md](README.md) for the public project overview.
 ## Non-negotiable constraints
 
 - Write documentation, code comments, and docstrings in English.
+- Treat the project as a pre-1.0 demo with no backward-compatibility guarantee.
+  Breaking changes to project-owned APIs, schemas, fixtures, and disposable demo
+  infrastructure are always allowed. Update code, tests, and documentation
+  together instead of adding compatibility layers, dual writes, deprecation
+  windows, or data migrations unless a current acceptance criterion explicitly
+  requires them. This does not authorize destructive changes to external data,
+  shared workspace resources, or infrastructure outside the resolved project
+  scope.
 - Keep generated SQL read-only and restricted to catalog-registered views.
 - Never allow an LLM response to bypass deterministic SQL validation, resource
   limits, identity checks, or operation approval.
