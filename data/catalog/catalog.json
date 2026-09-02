@@ -1,0 +1,326 @@
+{
+  "schema": "lakeops/catalog@1",
+  "catalog_version": "2.0.0",
+  "title": "LakeOps Agent Wikimedia data contract",
+  "updated": "2026-09-02",
+  "domain": "wikimedia",
+  "authority": "This file is the single authority for source, dataset, schema, join, KPI, partition, freshness, sensitivity, volume profile, and governed view metadata.",
+  "time_domain": {
+    "timezone": "UTC",
+    "batch_partition": "calendar day",
+    "stream_window": "event time with explicit watermark",
+    "pageview_filename_semantics": "The timestamp in a pageviews filename is the end of the captured hour.",
+    "logical_hour_semantics": "The hour partition is the UTC window-start hour; source filename placeholders use the window-end timestamp."
+  },
+  "sources": [
+    {
+      "id": "wikimedia_pageviews",
+      "publisher": "Wikimedia Foundation",
+      "title": "Public per-page hourly pageviews",
+      "delivery": "hourly_files",
+      "format": "gzip-compressed space-delimited text",
+      "file_schema": ["domain_code", "page_title", "count_views", "total_response_size"],
+      "base_url": "https://dumps.wikimedia.org/other/pageviews/",
+      "url_template": "{year}/{year}-{month}/pageviews-{yyyyMMdd}-{HH}0000.gz",
+      "url_template_clock": "All URL placeholders are evaluated from the capture-end timestamp, including year and month directory boundaries.",
+      "documentation": "https://wikitech.wikimedia.org/wiki/Analytics/Data/Pageviews",
+      "license": {
+        "id": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      },
+      "daily_batch": {
+        "timezone": "UTC",
+        "expected_hourly_files": 24,
+        "source_file_set": "Logical day D requires capture-end labels D 010000 through D 230000 plus D+1 000000.",
+        "completeness_rule": "Do not publish the daily partition until all 24 expected hourly objects have been downloaded, checksummed, parsed, and validated.",
+        "late_source_policy": "Record the missing source hour and retry without publishing a partial accepted day."
+      },
+      "provenance": {
+        "required": ["source_url", "source_last_modified", "source_etag", "source_content_length", "source_sha256", "retrieved_at"],
+        "repository_policy": "Do not commit upstream bulk files; commit only small designated fixtures and their provenance."
+      }
+    },
+    {
+      "id": "wikimedia_recentchange",
+      "publisher": "Wikimedia Foundation",
+      "title": "Public MediaWiki recent-change event stream",
+      "delivery": "server_sent_events",
+      "format": "SSE carrying JSON events",
+      "endpoint": "https://stream.wikimedia.org/v2/stream/recentchange",
+      "schema_url": "https://schema.wikimedia.org/repositories/primary/jsonschema/mediawiki/recentchange/latest.yaml",
+      "documentation": "https://wikitech.wikimedia.org/wiki/Event_Platform/EventStreams_HTTP_Service",
+      "recovery": {
+        "cursor": "SSE Last-Event-ID",
+        "checkpoint_rule": "Persist a checkpoint only after the corresponding immutable bronze micro-batch and manifest are durable.",
+        "retention_note": "Upstream replay availability is bounded; retain project-owned bronze events for deterministic replay."
+      },
+      "ingress_projection": "Validate the upstream schema, retain only the allowlisted recentchange_events fields, and discard forbidden identity and free-text fields before durable storage or tracing."
+    }
+  ],
+  "volume_profiles": [
+    {
+      "id": "tiny",
+      "purpose": "Fast local integration",
+      "pageview_hours": 1,
+      "expected_compressed_mb": [45, 75]
+    },
+    {
+      "id": "demo",
+      "purpose": "Hundreds-of-megabytes pipeline demonstration",
+      "pageview_hours": 6,
+      "expected_compressed_mb": [270, 450]
+    },
+    {
+      "id": "daily",
+      "purpose": "Complete daily batch",
+      "pageview_hours": 24,
+      "expected_compressed_mb": [1100, 1700]
+    },
+    {
+      "id": "soak",
+      "purpose": "Seven-day scale and recovery validation",
+      "pageview_hours": 168,
+      "expected_compressed_mb": [7700, 12000]
+    }
+  ],
+  "volume_note": "Compressed-size ranges are planning estimates based on observed Wikimedia hourly dumps and are not source guarantees. Acceptance uses discovered Content-Length and manifest evidence.",
+  "storage": {
+    "bronze_batch": "bronze/pageviews/partition_date={yyyy-MM-dd}/hour={HH}",
+    "bronze_stream": "bronze/recentchange/partition_date={yyyy-MM-dd}/hour={HH}/window={window_id}",
+    "silver": "silver/{dataset_id}/partition_date={yyyy-MM-dd}",
+    "gold": "gold/{dataset_id}/partition_date={yyyy-MM-dd}",
+    "manifests": "manifests/{dataset_id}/partition_date={yyyy-MM-dd}/{manifest_id}.json"
+  },
+  "publication": {
+    "immutable_objects": true,
+    "no_clobber": "A publisher must fail if the target object identity already exists with different content.",
+    "accepted_manifest": "An accepted manifest becomes visible only after every referenced object is durable and validated.",
+    "replacement": "Corrections publish new objects and a new manifest; they never mutate or overwrite previously accepted evidence."
+  },
+  "stage_responsibilities": {
+    "bronze": "Immutable source evidence and allowlisted stream events with source identity, checksum or cursor, event time, ingestion time, and run metadata.",
+    "silver": "Typed and normalized records with decoded project identity, validated counts, deduplication, watermark handling, and explicit rejection evidence.",
+    "gold": "Complete daily and hourly metrics derived only from accepted silver manifests."
+  },
+  "identity_normalization": {
+    "stream_project_allowlist": {
+      "en.wikipedia.org": "en",
+      "commons.wikimedia.org": "commons.m"
+    },
+    "project_code_rule": "Pageviews uses domain_code directly. Recent-change records are joinable only when server_name has an exact entry in stream_project_allowlist; unmapped hosts remain valid stream evidence but do not enter cross-source views.",
+    "page_title_rule": "Decode the Pageviews page_title once from its source encoding and normalize spaces to underscores. Normalize recent-change title spaces to underscores. Preserve case and all other characters.",
+    "join_rule": "Cross-source joins use canonical project_code, canonical page_title, and the UTC window end after both source-specific normalization rules succeed."
+  },
+  "privacy": {
+    "classification": "public aggregated traffic and allowlisted public change metadata",
+    "forbidden_persisted_stream_fields": ["user", "comment", "parsedcomment", "log_params", "ip"],
+    "rule": "Forbidden stream fields are removed before durable storage, logs, traces, fixtures, and queryable views. Raw recent-change events are not retained.",
+    "pageview_boundary": "Use only the public aggregate dump. Do not attempt to recover user, device, geographic, or request-level information."
+  },
+  "datasets": [
+    {
+      "id": "pageviews_hourly",
+      "domain": "traffic",
+      "source": "wikimedia_pageviews",
+      "stage": "silver",
+      "sensitivity": "public",
+      "partition_keys": ["partition_date", "hour"],
+      "primary_key": ["project_code", "page_title", "window_end"],
+      "fields": ["project_code", "page_title", "view_count", "response_bytes", "window_end", "partition_date", "hour", "source_object"],
+      "schema": [
+        {"name": "project_code", "type": "string", "nullable": false},
+        {"name": "page_title", "type": "string", "nullable": false},
+        {"name": "view_count", "type": "integer", "nullable": false},
+        {"name": "response_bytes", "type": "integer", "nullable": false},
+        {"name": "window_end", "type": "timestamp", "nullable": false},
+        {"name": "partition_date", "type": "date", "nullable": false},
+        {"name": "hour", "type": "integer", "nullable": false},
+        {"name": "source_object", "type": "string", "nullable": false}
+      ],
+      "freshness": "A UTC day is complete only when all 24 source hours have accepted silver manifests."
+    },
+    {
+      "id": "recentchange_events",
+      "domain": "editing_activity",
+      "source": "wikimedia_recentchange",
+      "stage": "silver",
+      "sensitivity": "public_allowlisted",
+      "partition_keys": ["partition_date", "hour"],
+      "primary_key": ["event_id"],
+      "fields": ["event_id", "event_time", "wiki", "change_type", "namespace", "title", "page_id", "revision_old_id", "revision_new_id", "length_old", "length_new", "is_bot", "is_minor", "server_name", "source_schema"],
+      "schema": [
+        {"name": "event_id", "type": "string", "nullable": false},
+        {"name": "event_time", "type": "timestamp", "nullable": false},
+        {"name": "wiki", "type": "string", "nullable": false},
+        {"name": "change_type", "type": "string", "nullable": false},
+        {"name": "namespace", "type": "integer", "nullable": false},
+        {"name": "title", "type": "string", "nullable": false},
+        {"name": "page_id", "type": "integer", "nullable": true},
+        {"name": "revision_old_id", "type": "integer", "nullable": true},
+        {"name": "revision_new_id", "type": "integer", "nullable": true},
+        {"name": "length_old", "type": "integer", "nullable": true},
+        {"name": "length_new", "type": "integer", "nullable": true},
+        {"name": "is_bot", "type": "boolean", "nullable": false},
+        {"name": "is_minor", "type": "boolean", "nullable": false},
+        {"name": "server_name", "type": "string", "nullable": false},
+        {"name": "source_schema", "type": "string", "nullable": false}
+      ],
+      "freshness": "Accepted events must remain behind the configured event-time watermark by no more than the declared stream-lag objective."
+    },
+    {
+      "id": "source_partitions",
+      "domain": "pipeline_operations",
+      "source": "internal",
+      "stage": "silver",
+      "sensitivity": "public",
+      "partition_keys": ["partition_date"],
+      "primary_key": ["source_id", "logical_partition"],
+      "fields": ["source_id", "logical_partition", "expected_object_count", "accepted_object_count", "status", "last_checked_at", "manifest_id"],
+      "freshness": "Updated whenever source discovery, validation, or publication changes partition state."
+    },
+    {
+      "id": "pipeline_runs",
+      "domain": "pipeline_operations",
+      "source": "internal",
+      "stage": "silver",
+      "sensitivity": "public",
+      "partition_keys": ["partition_date"],
+      "primary_key": ["run_id"],
+      "fields": ["run_id", "dataset_id", "stage", "logical_partition", "status", "started_at", "finished_at", "input_manifest_ids", "output_manifest_id", "row_count", "error_code"],
+      "freshness": "Available within five minutes of run completion, including failed and rejected runs."
+    },
+    {
+      "id": "page_activity_hourly",
+      "domain": "analytical",
+      "source": "recentchange_events",
+      "stage": "gold",
+      "sensitivity": "public",
+      "partition_keys": ["partition_date", "hour"],
+      "primary_key": ["project_code", "page_title", "window_end"],
+      "fields": ["project_code", "page_title", "window_end", "change_count", "bot_change_count", "minor_change_count", "net_bytes_delta", "input_manifest_ids"],
+      "freshness": "Published after the stream watermark closes the hour."
+    },
+    {
+      "id": "project_traffic_daily",
+      "domain": "analytical",
+      "source": "pageviews_hourly",
+      "stage": "gold",
+      "sensitivity": "public",
+      "partition_keys": ["partition_date"],
+      "primary_key": ["project_code", "partition_date"],
+      "fields": ["project_code", "partition_date", "view_count", "response_bytes", "unique_page_count", "input_hour_count", "is_complete", "input_manifest_ids", "computed_at"],
+      "freshness": "Published only after all 24 accepted hourly inputs are present."
+    },
+    {
+      "id": "ingestion_freshness",
+      "domain": "analytical",
+      "source": "source_partitions,pipeline_runs",
+      "stage": "gold",
+      "sensitivity": "public",
+      "partition_keys": ["partition_date"],
+      "primary_key": ["source_id", "logical_partition"],
+      "fields": ["source_id", "logical_partition", "expected_count", "accepted_count", "freshness_status", "lag_seconds", "last_successful_run_id", "current_manifest_id"],
+      "freshness": "Updated after every batch discovery cycle and stream checkpoint publication."
+    }
+  ],
+  "joins": [
+    {
+      "left": "pageviews_hourly.project_code,pageviews_hourly.page_title,pageviews_hourly.window_end",
+      "right": "page_activity_hourly.project_code,page_activity_hourly.page_title,page_activity_hourly.window_end",
+      "cardinality": "one_to_zero_or_one",
+      "purpose": "Compare traffic with editing activity for the same page and hour."
+    },
+    {
+      "left": "pipeline_runs.logical_partition",
+      "right": "source_partitions.logical_partition",
+      "cardinality": "many_to_one",
+      "purpose": "Trace a published or missing partition to its processing history."
+    },
+    {
+      "left": "ingestion_freshness.logical_partition",
+      "right": "source_partitions.logical_partition",
+      "cardinality": "one_to_one",
+      "purpose": "Expose completeness and lag evidence to governed diagnosis."
+    }
+  ],
+  "kpis": [
+    {
+      "id": "kpi.project_daily_views",
+      "unit": "views",
+      "formula": "sum(pageviews_hourly.view_count) by project_code and partition_date",
+      "completeness": "input_hour_count must equal 24"
+    },
+    {
+      "id": "kpi.page_hourly_changes",
+      "unit": "changes",
+      "formula": "count(recentchange_events.event_id) by project_code, page_title, and closed event-time hour"
+    },
+    {
+      "id": "kpi.source_completeness_pct",
+      "unit": "percent",
+      "formula": "100 * accepted_count / expected_count"
+    },
+    {
+      "id": "kpi.stream_lag_seconds",
+      "unit": "seconds",
+      "formula": "ingestion checkpoint time minus maximum accepted event_time"
+    }
+  ],
+  "business_terms": [
+    {
+      "term": "project",
+      "definition": "A Wikimedia project code such as en for English Wikipedia or commons.m for Wikimedia Commons.",
+      "maps_to": ["pageviews_hourly.project_code", "page_activity_hourly.project_code"]
+    },
+    {
+      "term": "page traffic",
+      "definition": "Hourly public aggregate page views after Wikimedia bot and spider filtering.",
+      "maps_to": ["pageviews_hourly.view_count", "kpi.project_daily_views"]
+    },
+    {
+      "term": "editing activity",
+      "definition": "Allowlisted recent-change metadata aggregated by project, page, and event-time window.",
+      "maps_to": ["page_activity_hourly.change_count"]
+    },
+    {
+      "term": "complete day",
+      "definition": "A UTC pageviews day with all 24 expected hourly source files accepted.",
+      "maps_to": ["project_traffic_daily.is_complete", "ingestion_freshness.freshness_status"]
+    },
+    {
+      "term": "missing hour",
+      "definition": "An expected pageviews source hour that is absent, rejected, or not referenced by the accepted daily manifest.",
+      "maps_to": ["source_partitions", "pipeline_runs.error_code"]
+    }
+  ],
+  "query_surface": {
+    "policy": "Only these views may be registered in DuckDB for governed text-to-SQL. Direct file reads and model-generated paths are forbidden.",
+    "views": ["v_project_traffic_daily", "v_page_activity_hourly", "v_page_traffic_activity", "v_ingestion_freshness", "v_pipeline_runs"],
+    "view_contracts": {
+      "v_project_traffic_daily": ["project_code", "partition_date", "view_count", "response_bytes", "unique_page_count", "input_hour_count", "is_complete", "computed_at"],
+      "v_page_activity_hourly": ["project_code", "page_title", "window_end", "change_count", "bot_change_count", "minor_change_count", "net_bytes_delta"],
+      "v_page_traffic_activity": ["project_code", "page_title", "window_end", "view_count", "change_count", "net_bytes_delta"],
+      "v_ingestion_freshness": ["source_id", "logical_partition", "expected_count", "accepted_count", "freshness_status", "lag_seconds", "last_successful_run_id"],
+      "v_pipeline_runs": ["run_id", "dataset_id", "stage", "logical_partition", "status", "started_at", "finished_at", "row_count", "error_code"]
+    }
+  },
+  "primary_scenario": {
+    "id": "missing-pageviews-hour-2026-08-01-13",
+    "question": "Why did reported English Wikipedia traffic drop on 2026-08-01 between 13:00 and 14:00 UTC?",
+    "project_code": "en",
+    "partition_date": "2026-08-01",
+    "logical_window": "2026-08-01T13:00:00Z/2026-08-01T14:00:00Z",
+    "withheld_source_label": "20260801-140000",
+    "fault": "missing_hourly_pageviews_partition",
+    "fault_injection": "The scenario withholds the source object whose filename marks the end of the 13:00-14:00 UTC window, leaving the daily partition at 23 of 24 accepted hours.",
+    "expected_diagnosis": "The reported drop is an incomplete ingestion result, not evidence of a real traffic decline.",
+    "negative_control": "When all 24 hours are accepted, a real view-count change must not be labeled as a pipeline failure.",
+    "remediation": {
+      "operation": "backfill_hour",
+      "requires_approval": true,
+      "publishes_new_manifest": true,
+      "overwrites_existing_objects": false,
+      "verification": "The new daily manifest references 24 accepted hours and recomputed project traffic no longer contains the artificial gap."
+    }
+  }
+}

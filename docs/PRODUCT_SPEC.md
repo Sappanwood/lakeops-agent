@@ -2,10 +2,9 @@
 
 ## Product overview
 
-LakeOps Agent is a governed data operations copilot for a fictional
-telecommunications analytics platform. It connects operational diagnosis,
-natural-language analytics, and controlled remediation in one demonstrable
-workflow.
+LakeOps Agent is a governed data operations copilot for a public Wikimedia
+analytics pipeline. It connects operational diagnosis, natural-language
+analytics, and controlled remediation in one demonstrable workflow.
 
 The product is a portfolio project, not a production service. Its implementation
 must nevertheless expose the controls, evidence, and trade-offs required to move
@@ -21,17 +20,18 @@ a proof of concept toward production.
 
 ## Primary demo scenario
 
-The fictional platform receives telecommunications network telemetry and daily
-reference data:
+The platform receives two public Wikimedia sources:
 
-- Streaming cell-site and service-quality telemetry.
-- Batch network inventory, maintenance windows, and incident records.
-- Curated service-level indicators derived from both paths.
+- Hourly per-page traffic files from the Wikimedia pageviews dump.
+- Live recent-change events from the Wikimedia EventStreams SSE endpoint.
 
-During the demo, a delayed or malformed partition causes an SLA metric to become
-stale. The user asks the agent why a regional metric changed. The agent generates
-safe SQL, identifies the data quality issue, proposes remediation, requests human
-approval, and verifies the repaired state.
+A daily batch consumes all 24 UTC pageview files while the streaming path
+materializes allowlisted editing-activity windows. During the primary demo, one
+hourly pageview object is withheld, creating an incomplete daily traffic result.
+The user asks why reported English Wikipedia traffic dropped. The agent generates
+safe SQL, proves that the apparent drop is a missing source partition rather than
+a real demand change, proposes an exact backfill, requests human approval, and
+verifies the newly published complete manifest.
 
 ## Core capabilities
 
@@ -54,31 +54,38 @@ approval, and verifies the repaired state.
 
 ### Batch pipeline
 
-The batch path generates or ingests reference data, validates its schema and
-quality, writes immutable Parquet objects, and publishes a dataset manifest only
-after successful validation.
+The batch path discovers and downloads 24 hourly pageview files for a UTC day,
+records source provenance and checksums, validates and normalizes the four-field
+source format, writes immutable Parquet objects, and publishes a daily manifest
+only after every expected hour succeeds.
 
 ### Streaming pipeline
 
-The streaming path publishes synthetic telemetry to Azure Event Hubs. A stream
-processor checkpoints consumption, validates events, and writes bounded
-micro-batches as immutable Parquet objects. Downstream batch transforms merge the
-stream and reference domains into curated analytical datasets.
+The streaming path consumes Wikimedia recent-change SSE events and can relay the
+allowlisted projection through Azure Event Hubs. A stream processor checkpoints
+consumption, validates events, removes identity and free-text fields before
+durable storage, and writes bounded micro-batches as immutable Parquet objects.
+Downstream transforms join traffic and editing activity by project, page, and
+event-time window.
 
 ## Data contract
 
-The initial public dataset uses synthetic data only. The planned dataset registry
-contains:
+The MVP uses real public Wikimedia sources at a scale suitable for data-pipeline
+operations:
 
-- Dataset and logical view names.
-- Storage prefixes and partition keys.
-- Column types and business descriptions.
-- Approved join relationships.
-- KPI definitions, units, and aggregation rules.
-- Freshness objectives and data sensitivity labels.
+- Pageview dump files are hourly, roughly tens of compressed megabytes each; a
+  complete daily profile processes 24 files and about 1-2 GB compressed.
+- Recent-change events are consumed from a live SSE stream, with deterministic
+  recorded projections reserved only for tests and replay.
+- Raw recent-change identity and free-text fields are discarded before durable
+  storage, logs, traces, fixtures, or governed queries.
 
-The registry is version-controlled and is the only source from which queryable
-DuckDB views may be created.
+The versioned dataset contract in `data/catalog/catalog.json` is the single
+validated authority for dataset and logical view names, storage prefixes,
+partition keys, column types, business descriptions and terms, approved joins,
+KPI definitions with units and aggregation rules, freshness objectives, and
+sensitivity labels. It is the only source from which queryable DuckDB views may
+be created.
 
 ## Security and control boundaries
 
@@ -101,7 +108,7 @@ The project measures:
 
 ## Delivery stages
 
-1. Repository, architecture, Terraform root, and synthetic data contract.
+1. Repository, architecture, Terraform root, and Wikimedia data contract.
 2. Batch and streaming pipelines with local emulation and Azure deployment.
 3. Safe text-to-SQL workflow and evaluation dataset.
 4. Data operations diagnosis and one human-approved remediation action.

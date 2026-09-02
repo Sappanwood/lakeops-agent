@@ -1,8 +1,8 @@
 # LakeOps Agent
 
-LakeOps Agent is a portfolio-grade Azure data operations copilot for a fictional
-telecommunications data platform. It combines governed text-to-SQL, batch and
-streaming data pipelines, and human-approved operational actions.
+LakeOps Agent is a portfolio-grade Azure data operations copilot built around
+public Wikimedia traffic and editing activity. It combines governed text-to-SQL,
+batch and streaming data pipelines, and human-approved operational actions.
 
 The project is designed to demonstrate how an agent prototype can move toward a
 production deployment through explicit security boundaries, evaluation,
@@ -14,7 +14,7 @@ observability, and infrastructure as code.
 - Generate and execute read-only SQL against curated Parquet datasets.
 - Diagnose data freshness, schema drift, missing partitions, and failed jobs.
 - Propose operational remediation and require approval before mutation.
-- Simulate both scheduled batch ingestion and event-driven telemetry ingestion.
+- Run daily Wikimedia pageview ingestion and event-driven recent-change ingestion.
 - Trace and evaluate agent, tool, and query execution end to end.
 
 ## Architecture
@@ -33,7 +33,8 @@ and [Cost model](docs/COST_MODEL.md) for the current design.
 
 The repository currently contains the initial architecture, product contract,
 cost assumptions, component boundaries, and Terraform root configuration.
-Application and pipeline implementation will be added incrementally.
+The versioned Wikimedia data contract is defined; application and pipeline
+implementation will be added incrementally.
 
 ## Repository layout
 

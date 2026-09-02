@@ -15,9 +15,9 @@ endpoints, premium support, and production redundancy.
 | Assumption | Public demo | Stream showcase | Continuous stream |
 |---|---:|---:|---:|
 | API traffic | Fewer than 10,000 requests/month | Same | Fewer than 50,000 requests/month |
-| Batch jobs | 5 minutes/hour at 0.5 vCPU and 1 GiB | Same | Same |
-| Streaming resources | Not provisioned | Event Hubs provisioned; workers run on demand | Event Hubs plus one 0.25 vCPU and 0.5 GiB worker active 24/7 |
-| Stored data | 25 GiB Hot LRS | 50 GiB Hot LRS | 100 GiB Hot LRS |
+| Batch jobs | One 24-file Wikimedia Pageviews run/day; budget up to 60 minutes at 1 vCPU and 2 GiB | Same | Same |
+| Streaming resources | Not provisioned | Event Hubs provisioned; recent-change relay and processor run on demand | Event Hubs plus one 0.25 vCPU and 0.5 GiB worker active 24/7 |
+| Stored data | 25 GiB Hot LRS with short bronze retention | 50 GiB Hot LRS | 100 GiB Hot LRS |
 | Model usage | 5M input and 1M output tokens/month | Same | 20M input and 4M output tokens/month |
 | Log ingestion | Kept within the free allowance | Kept within or near the free allowance | 5-10 GiB/month after sampling and redaction |
 
@@ -38,6 +38,13 @@ The low end assumes the Azure subscription still has the relevant Container Apps
 and monitoring free grants available. Free grants are shared at subscription
 scope and may already be consumed by other projects. The agent has no separate
 hosted-runtime charge because FastAPI and LangGraph share one Container App.
+
+The daily batch processes roughly 1-2 GB of compressed public Pageviews input
+before Parquet transformation. The 25 GiB public-demo storage assumption therefore
+depends on lifecycle deletion of bulk bronze objects after the configured evidence
+window; manifests, small fixtures, and curated outputs remain reproducible from
+pinned source partitions. Benchmark actual runtime and expansion ratio before the
+first Azure deployment and revise this model if the daily run exceeds its budget.
 
 ### Container Apps environment meter caveat
 
@@ -82,6 +89,8 @@ additional margin for the API and jobs.
 - Use Event Hubs Basic over AMQP. Do not enable Kafka endpoint, Capture, Standard,
   Premium, or Dedicated tiers without a demonstrated requirement.
 - Use ACR Basic and lifecycle-delete unused images.
+- Apply a short lifecycle policy to downloaded Pageviews bronze objects while
+  retaining checksums and immutable manifests needed for reproducibility.
 - Apply short log retention, trace sampling, and prompt/tool-result redaction.
 - Set model token, turn, tool-call, and concurrency budgets.
 - Add Azure budget alerts at $25, $50, and $100.

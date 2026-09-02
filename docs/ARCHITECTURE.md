@@ -65,18 +65,20 @@ durable checkpoints require a separately justified store.
 
 ### Batch pipeline
 
-Scheduled Container Apps Jobs create synthetic daily inputs, validate data,
-produce partitioned Parquet, and atomically publish manifests after all output
-objects are durable.
+Scheduled Container Apps Jobs discover the 24 Wikimedia pageview files expected
+for a UTC day, download and checksum them, validate data against the versioned
+contract, produce partitioned Parquet, and atomically publish a daily manifest
+after all hourly output objects are durable.
 
 ### Streaming pipeline
 
-A producer job sends synthetic network telemetry to Event Hubs. The stream
+A producer consumes Wikimedia recent-change SSE events, applies the contract's
+privacy projection, and relays the allowlisted records to Event Hubs. The stream
 processor consumes with checkpoints and materializes time-bounded immutable
-Parquet micro-batches. The complete streaming profile is disabled by default so
-Event Hubs does not create an idle fixed cost. When the profile is enabled, the
-processor scales to zero between events unless continuous mode is explicitly
-selected.
+Parquet micro-batches. Raw identity and free-text fields never enter durable
+storage. The complete streaming profile is disabled by default so Event Hubs does
+not create an idle fixed cost. When the profile is enabled, the processor scales
+to zero between events unless continuous mode is explicitly selected.
 
 ## Core flows
 
@@ -113,8 +115,9 @@ signal or user request
 
 ### Batch and stream convergence
 
-Both ingestion paths publish immutable bronze data. Batch transformations validate
-and normalize bronze partitions into silver datasets, then compute gold business
+Both ingestion paths publish immutable bronze data after source validation and
+privacy projection. Batch transformations normalize bronze partitions into
+silver datasets, then compute gold traffic, editing-activity, and freshness
 metrics. Text-to-SQL queries only curated silver or gold views.
 
 ## Scaling and cost modes
