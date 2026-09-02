@@ -7,5 +7,5 @@ package.
 Run the current dataset-contract checks with:
 
 ```bash
-python3 -m unittest tests/test_catalog_contract.py
+python3 -m unittest discover -s tests
 ```

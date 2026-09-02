@@ -1,6 +1,6 @@
 {
   "schema": "lakeops/catalog@1",
-  "catalog_version": "2.0.0",
+  "catalog_version": "2.1.0",
   "title": "LakeOps Agent Wikimedia data contract",
   "updated": "2026-09-02",
   "domain": "wikimedia",
@@ -147,7 +147,7 @@
       "sensitivity": "public_allowlisted",
       "partition_keys": ["partition_date", "hour"],
       "primary_key": ["event_id"],
-      "fields": ["event_id", "event_time", "wiki", "change_type", "namespace", "title", "page_id", "revision_old_id", "revision_new_id", "length_old", "length_new", "is_bot", "is_minor", "server_name", "source_schema"],
+      "fields": ["event_id", "event_time", "wiki", "change_type", "namespace", "title", "page_id", "revision_old_id", "revision_new_id", "length_old", "length_new", "is_bot", "is_minor", "server_name", "source_schema", "partition_date", "hour"],
       "schema": [
         {"name": "event_id", "type": "string", "nullable": false},
         {"name": "event_time", "type": "timestamp", "nullable": false},
@@ -163,7 +163,9 @@
         {"name": "is_bot", "type": "boolean", "nullable": false},
         {"name": "is_minor", "type": "boolean", "nullable": false},
         {"name": "server_name", "type": "string", "nullable": false},
-        {"name": "source_schema", "type": "string", "nullable": false}
+        {"name": "source_schema", "type": "string", "nullable": false},
+        {"name": "partition_date", "type": "date", "nullable": false},
+        {"name": "hour", "type": "integer", "nullable": false}
       ],
       "freshness": "Accepted events must remain behind the configured event-time watermark by no more than the declared stream-lag objective."
     },
@@ -175,7 +177,17 @@
       "sensitivity": "public",
       "partition_keys": ["partition_date"],
       "primary_key": ["source_id", "logical_partition"],
-      "fields": ["source_id", "logical_partition", "expected_object_count", "accepted_object_count", "status", "last_checked_at", "manifest_id"],
+      "fields": ["source_id", "logical_partition", "expected_object_count", "accepted_object_count", "status", "last_checked_at", "manifest_id", "partition_date"],
+      "schema": [
+        {"name": "source_id", "type": "string", "nullable": false},
+        {"name": "logical_partition", "type": "string", "nullable": false},
+        {"name": "expected_object_count", "type": "integer", "nullable": false},
+        {"name": "accepted_object_count", "type": "integer", "nullable": false},
+        {"name": "status", "type": "string", "nullable": false},
+        {"name": "last_checked_at", "type": "timestamp", "nullable": false},
+        {"name": "manifest_id", "type": "string", "nullable": true},
+        {"name": "partition_date", "type": "date", "nullable": false}
+      ],
       "freshness": "Updated whenever source discovery, validation, or publication changes partition state."
     },
     {
@@ -186,7 +198,22 @@
       "sensitivity": "public",
       "partition_keys": ["partition_date"],
       "primary_key": ["run_id"],
-      "fields": ["run_id", "dataset_id", "stage", "logical_partition", "status", "started_at", "finished_at", "input_manifest_ids", "output_manifest_id", "row_count", "error_code"],
+      "fields": ["run_id", "source_id", "dataset_id", "stage", "logical_partition", "status", "started_at", "finished_at", "input_manifest_ids", "output_manifest_id", "row_count", "error_code", "partition_date"],
+      "schema": [
+        {"name": "run_id", "type": "string", "nullable": false},
+        {"name": "source_id", "type": "string", "nullable": false},
+        {"name": "dataset_id", "type": "string", "nullable": false},
+        {"name": "stage", "type": "string", "nullable": false},
+        {"name": "logical_partition", "type": "string", "nullable": false},
+        {"name": "status", "type": "string", "nullable": false},
+        {"name": "started_at", "type": "timestamp", "nullable": false},
+        {"name": "finished_at", "type": "timestamp", "nullable": true},
+        {"name": "input_manifest_ids", "type": "array_string", "nullable": false},
+        {"name": "output_manifest_id", "type": "string", "nullable": true},
+        {"name": "row_count", "type": "integer", "nullable": true},
+        {"name": "error_code", "type": "string", "nullable": true},
+        {"name": "partition_date", "type": "date", "nullable": false}
+      ],
       "freshness": "Available within five minutes of run completion, including failed and rejected runs."
     },
     {
@@ -197,7 +224,19 @@
       "sensitivity": "public",
       "partition_keys": ["partition_date", "hour"],
       "primary_key": ["project_code", "page_title", "window_end"],
-      "fields": ["project_code", "page_title", "window_end", "change_count", "bot_change_count", "minor_change_count", "net_bytes_delta", "input_manifest_ids"],
+      "fields": ["project_code", "page_title", "window_end", "change_count", "bot_change_count", "minor_change_count", "net_bytes_delta", "input_manifest_ids", "partition_date", "hour"],
+      "schema": [
+        {"name": "project_code", "type": "string", "nullable": false},
+        {"name": "page_title", "type": "string", "nullable": false},
+        {"name": "window_end", "type": "timestamp", "nullable": false},
+        {"name": "change_count", "type": "integer", "nullable": false},
+        {"name": "bot_change_count", "type": "integer", "nullable": false},
+        {"name": "minor_change_count", "type": "integer", "nullable": false},
+        {"name": "net_bytes_delta", "type": "integer", "nullable": false},
+        {"name": "input_manifest_ids", "type": "array_string", "nullable": false},
+        {"name": "partition_date", "type": "date", "nullable": false},
+        {"name": "hour", "type": "integer", "nullable": false}
+      ],
       "freshness": "Published after the stream watermark closes the hour."
     },
     {
@@ -209,6 +248,17 @@
       "partition_keys": ["partition_date"],
       "primary_key": ["project_code", "partition_date"],
       "fields": ["project_code", "partition_date", "view_count", "response_bytes", "unique_page_count", "input_hour_count", "is_complete", "input_manifest_ids", "computed_at"],
+      "schema": [
+        {"name": "project_code", "type": "string", "nullable": false},
+        {"name": "partition_date", "type": "date", "nullable": false},
+        {"name": "view_count", "type": "integer", "nullable": false},
+        {"name": "response_bytes", "type": "integer", "nullable": false},
+        {"name": "unique_page_count", "type": "integer", "nullable": false},
+        {"name": "input_hour_count", "type": "integer", "nullable": false},
+        {"name": "is_complete", "type": "boolean", "nullable": false},
+        {"name": "input_manifest_ids", "type": "array_string", "nullable": false},
+        {"name": "computed_at", "type": "timestamp", "nullable": false}
+      ],
       "freshness": "Published only after all 24 accepted hourly inputs are present."
     },
     {
@@ -219,26 +269,40 @@
       "sensitivity": "public",
       "partition_keys": ["partition_date"],
       "primary_key": ["source_id", "logical_partition"],
-      "fields": ["source_id", "logical_partition", "expected_count", "accepted_count", "freshness_status", "lag_seconds", "last_successful_run_id", "current_manifest_id"],
+      "fields": ["source_id", "logical_partition", "expected_count", "accepted_count", "freshness_status", "lag_seconds", "last_successful_run_id", "current_manifest_id", "partition_date"],
+      "schema": [
+        {"name": "source_id", "type": "string", "nullable": false},
+        {"name": "logical_partition", "type": "string", "nullable": false},
+        {"name": "expected_count", "type": "integer", "nullable": false},
+        {"name": "accepted_count", "type": "integer", "nullable": false},
+        {"name": "freshness_status", "type": "string", "nullable": false},
+        {"name": "lag_seconds", "type": "integer", "nullable": false},
+        {"name": "last_successful_run_id", "type": "string", "nullable": true},
+        {"name": "current_manifest_id", "type": "string", "nullable": true},
+        {"name": "partition_date", "type": "date", "nullable": false}
+      ],
       "freshness": "Updated after every batch discovery cycle and stream checkpoint publication."
     }
   ],
   "joins": [
     {
+      "id": "page_traffic_activity_by_hour",
       "left": "pageviews_hourly.project_code,pageviews_hourly.page_title,pageviews_hourly.window_end",
       "right": "page_activity_hourly.project_code,page_activity_hourly.page_title,page_activity_hourly.window_end",
       "cardinality": "one_to_zero_or_one",
       "purpose": "Compare traffic with editing activity for the same page and hour."
     },
     {
-      "left": "pipeline_runs.logical_partition",
-      "right": "source_partitions.logical_partition",
+      "id": "pipeline_run_source_partition",
+      "left": "pipeline_runs.source_id,pipeline_runs.logical_partition",
+      "right": "source_partitions.source_id,source_partitions.logical_partition",
       "cardinality": "many_to_one",
       "purpose": "Trace a published or missing partition to its processing history."
     },
     {
-      "left": "ingestion_freshness.logical_partition",
-      "right": "source_partitions.logical_partition",
+      "id": "freshness_source_partition",
+      "left": "ingestion_freshness.source_id,ingestion_freshness.logical_partition",
+      "right": "source_partitions.source_id,source_partitions.logical_partition",
       "cardinality": "one_to_one",
       "purpose": "Expose completeness and lag evidence to governed diagnosis."
     }
@@ -297,11 +361,31 @@
     "policy": "Only these views may be registered in DuckDB for governed text-to-SQL. Direct file reads and model-generated paths are forbidden.",
     "views": ["v_project_traffic_daily", "v_page_activity_hourly", "v_page_traffic_activity", "v_ingestion_freshness", "v_pipeline_runs"],
     "view_contracts": {
-      "v_project_traffic_daily": ["project_code", "partition_date", "view_count", "response_bytes", "unique_page_count", "input_hour_count", "is_complete", "computed_at"],
-      "v_page_activity_hourly": ["project_code", "page_title", "window_end", "change_count", "bot_change_count", "minor_change_count", "net_bytes_delta"],
-      "v_page_traffic_activity": ["project_code", "page_title", "window_end", "view_count", "change_count", "net_bytes_delta"],
-      "v_ingestion_freshness": ["source_id", "logical_partition", "expected_count", "accepted_count", "freshness_status", "lag_seconds", "last_successful_run_id"],
-      "v_pipeline_runs": ["run_id", "dataset_id", "stage", "logical_partition", "status", "started_at", "finished_at", "row_count", "error_code"]
+      "v_project_traffic_daily": {
+        "inputs": ["project_traffic_daily"],
+        "joins": [],
+        "fields": ["project_code", "partition_date", "view_count", "response_bytes", "unique_page_count", "input_hour_count", "is_complete", "computed_at"]
+      },
+      "v_page_activity_hourly": {
+        "inputs": ["page_activity_hourly"],
+        "joins": [],
+        "fields": ["project_code", "page_title", "window_end", "change_count", "bot_change_count", "minor_change_count", "net_bytes_delta"]
+      },
+      "v_page_traffic_activity": {
+        "inputs": ["pageviews_hourly", "page_activity_hourly"],
+        "joins": ["page_traffic_activity_by_hour"],
+        "fields": ["project_code", "page_title", "window_end", "view_count", "change_count", "net_bytes_delta"]
+      },
+      "v_ingestion_freshness": {
+        "inputs": ["ingestion_freshness"],
+        "joins": [],
+        "fields": ["source_id", "logical_partition", "expected_count", "accepted_count", "freshness_status", "lag_seconds", "last_successful_run_id"]
+      },
+      "v_pipeline_runs": {
+        "inputs": ["pipeline_runs"],
+        "joins": [],
+        "fields": ["run_id", "source_id", "dataset_id", "stage", "logical_partition", "status", "started_at", "finished_at", "row_count", "error_code"]
+      }
     }
   },
   "primary_scenario": {

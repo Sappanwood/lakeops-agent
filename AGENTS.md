@@ -80,6 +80,7 @@ facts must remain self-contained in this repository's documentation.
 Run the gates relevant to the changed component. The initial repository supports:
 
 ```bash
+python3 -m unittest discover -s tests
 terraform fmt -check -recursive infra/terraform
 ```
 

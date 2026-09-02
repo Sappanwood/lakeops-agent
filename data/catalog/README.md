@@ -25,9 +25,15 @@ invent competing field or business definitions.
 ## Validation and consumption
 
 - `catalog_version` bumps whenever the contract changes materially.
-- The contract validator (backlog item LKO-013) checks schema conformance,
-  enum vocabularies, join references, and version behavior. Consumers (batch
-  pipeline, governed query tool, evaluation) derive catalog metadata only from
-  validated copies of this file.
+- `validator.py` checks the complete major-version-2 source, storage,
+  publication, privacy, dataset, KPI, business-term, and query contracts. Join
+  cardinality must be supported by dataset primary keys, and every logical view
+  declares the datasets and joins from which its fields originate.
+- Consumers call `validate_catalog()` and derive their source, dataset, and view
+  metadata from its complete return value. ID-bearing collections are sorted,
+  and `canonical_metadata_json()` provides a stable serialized representation
+  for manifests, fixtures, governed queries, evaluations, and contract snapshots.
+- Only `lakeops/catalog@1` with catalog major version 2 is supported. Older or
+  unknown contracts fail explicitly and are not coerced.
 - Physical storage roots are deployment configuration. This contract defines
   logical prefixes only.
