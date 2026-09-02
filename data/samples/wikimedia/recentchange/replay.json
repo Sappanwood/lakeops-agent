@@ -1,0 +1,104 @@
+{
+  "schema": "lakeops/recentchange-projection-fixture@1",
+  "cases": [
+    {
+      "case": "normal",
+      "event": {
+        "event_id": "rc-0001",
+        "event_time": "2024-01-01T01:00:05Z",
+        "wiki": "enwiki",
+        "change_type": "edit",
+        "namespace": 0,
+        "title": "LakeOps Agent",
+        "page_id": 1001,
+        "revision_old_id": 5000,
+        "revision_new_id": 5001,
+        "length_old": 120,
+        "length_new": 140,
+        "is_bot": false,
+        "is_minor": false,
+        "server_name": "en.wikipedia.org",
+        "source_schema": "/mediawiki/recentchange/1.0.0"
+      }
+    },
+    {
+      "case": "late",
+      "event": {
+        "event_id": "rc-0002",
+        "event_time": "2023-12-31T23:44:00Z",
+        "wiki": "enwiki",
+        "change_type": "edit",
+        "namespace": 0,
+        "title": "Late Edit",
+        "page_id": 1001,
+        "revision_old_id": 5000,
+        "revision_new_id": 5001,
+        "length_old": 120,
+        "length_new": 140,
+        "is_bot": false,
+        "is_minor": false,
+        "server_name": "en.wikipedia.org",
+        "source_schema": "/mediawiki/recentchange/1.0.0"
+      }
+    },
+    {
+      "case": "invalid",
+      "event": {
+        "event_time": "2024-01-01T01:00:10Z",
+        "wiki": "enwiki",
+        "change_type": "edit",
+        "namespace": 0,
+        "title": "Invalid Event",
+        "page_id": 1001,
+        "revision_old_id": 5000,
+        "revision_new_id": 5001,
+        "length_old": 120,
+        "length_new": 140,
+        "is_bot": false,
+        "is_minor": false,
+        "server_name": "en.wikipedia.org",
+        "source_schema": "/mediawiki/recentchange/1.0.0"
+      }
+    },
+    {
+      "case": "duplicate",
+      "event": {
+        "event_id": "rc-0001",
+        "event_time": "2024-01-01T01:00:15Z",
+        "wiki": "enwiki",
+        "change_type": "edit",
+        "namespace": 0,
+        "title": "LakeOps Agent",
+        "page_id": 1001,
+        "revision_old_id": 5000,
+        "revision_new_id": 5001,
+        "length_old": 120,
+        "length_new": 140,
+        "is_bot": false,
+        "is_minor": false,
+        "server_name": "en.wikipedia.org",
+        "source_schema": "/mediawiki/recentchange/1.0.0"
+      }
+    },
+    {
+      "case": "out_of_order",
+      "event": {
+        "event_id": "rc-0003",
+        "event_time": "2024-01-01T00:59:30Z",
+        "wiki": "enwiki",
+        "change_type": "edit",
+        "namespace": 0,
+        "title": "Earlier Event",
+        "page_id": 1001,
+        "revision_old_id": 5000,
+        "revision_new_id": 5001,
+        "length_old": 120,
+        "length_new": 140,
+        "is_bot": false,
+        "is_minor": false,
+        "server_name": "en.wikipedia.org",
+        "source_schema": "/mediawiki/recentchange/1.0.0"
+      }
+    }
+  ]
+}

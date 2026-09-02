@@ -1,0 +1,16 @@
+{
+  "complete_day": {
+    "partition_date": "2024-01-01",
+    "pageview_fixture": "complete-day.json",
+    "expected_source_object_count": 24,
+    "expected_missing_capture_end": []
+  },
+  "missing_hour_day": {
+    "partition_date": "2024-01-01",
+    "pageview_fixture": "missing-hour-day.json",
+    "expected_source_object_count": 23,
+    "expected_missing_capture_end": [
+      "2024-01-01T15:00:00Z"
+    ]
+  }
+}

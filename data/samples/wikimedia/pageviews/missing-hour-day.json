@@ -1,0 +1,396 @@
+{
+  "schema": "lakeops/pageview-source-excerpt@1",
+  "source_objects": [
+    {
+      "capture_end": "2024-01-01T01:00:00Z",
+      "records": [
+        {
+          "domain_code": "en",
+          "page_title": "LakeOps_Agent",
+          "count_views": "101",
+          "total_response_size": "4097"
+        },
+        {
+          "domain_code": "commons.m",
+          "page_title": "LakeOps_Logo",
+          "count_views": "21",
+          "total_response_size": "1025"
+        }
+      ]
+    },
+    {
+      "capture_end": "2024-01-01T02:00:00Z",
+      "records": [
+        {
+          "domain_code": "en",
+          "page_title": "LakeOps_Agent",
+          "count_views": "102",
+          "total_response_size": "4098"
+        },
+        {
+          "domain_code": "commons.m",
+          "page_title": "LakeOps_Logo",
+          "count_views": "22",
+          "total_response_size": "1026"
+        }
+      ]
+    },
+    {
+      "capture_end": "2024-01-01T03:00:00Z",
+      "records": [
+        {
+          "domain_code": "en",
+          "page_title": "LakeOps_Agent",
+          "count_views": "103",
+          "total_response_size": "4099"
+        },
+        {
+          "domain_code": "commons.m",
+          "page_title": "LakeOps_Logo",
+          "count_views": "23",
+          "total_response_size": "1027"
+        }
+      ]
+    },
+    {
+      "capture_end": "2024-01-01T04:00:00Z",
+      "records": [
+        {
+          "domain_code": "en",
+          "page_title": "LakeOps_Agent",
+          "count_views": "104",
+          "total_response_size": "4100"
+        },
+        {
+          "domain_code": "commons.m",
+          "page_title": "LakeOps_Logo",
+          "count_views": "24",
+          "total_response_size": "1028"
+        }
+      ]
+    },
+    {
+      "capture_end": "2024-01-01T05:00:00Z",
+      "records": [
+        {
+          "domain_code": "en",
+          "page_title": "LakeOps_Agent",
+          "count_views": "105",
+          "total_response_size": "4101"
+        },
+        {
+          "domain_code": "commons.m",
+          "page_title": "LakeOps_Logo",
+          "count_views": "25",
+          "total_response_size": "1029"
+        }
+      ]
+    },
+    {
+      "capture_end": "2024-01-01T06:00:00Z",
+      "records": [
+        {
+          "domain_code": "en",
+          "page_title": "LakeOps_Agent",
+          "count_views": "106",
+          "total_response_size": "4102"
+        },
+        {
+          "domain_code": "commons.m",
+          "page_title": "LakeOps_Logo",
+          "count_views": "26",
+          "total_response_size": "1030"
+        }
+      ]
+    },
+    {
+      "capture_end": "2024-01-01T07:00:00Z",
+      "records": [
+        {
+          "domain_code": "en",
+          "page_title": "LakeOps_Agent",
+          "count_views": "107",
+          "total_response_size": "4103"
+        },
+        {
+          "domain_code": "commons.m",
+          "page_title": "LakeOps_Logo",
+          "count_views": "27",
+          "total_response_size": "1031"
+        }
+      ]
+    },
+    {
+      "capture_end": "2024-01-01T08:00:00Z",
+      "records": [
+        {
+          "domain_code": "en",
+          "page_title": "LakeOps_Agent",
+          "count_views": "108",
+          "total_response_size": "4104"
+        },
+        {
+          "domain_code": "commons.m",
+          "page_title": "LakeOps_Logo",
+          "count_views": "28",
+          "total_response_size": "1032"
+        }
+      ]
+    },
+    {
+      "capture_end": "2024-01-01T09:00:00Z",
+      "records": [
+        {
+          "domain_code": "en",
+          "page_title": "LakeOps_Agent",
+          "count_views": "109",
+          "total_response_size": "4105"
+        },
+        {
+          "domain_code": "commons.m",
+          "page_title": "LakeOps_Logo",
+          "count_views": "29",
+          "total_response_size": "1033"
+        }
+      ]
+    },
+    {
+      "capture_end": "2024-01-01T10:00:00Z",
+      "records": [
+        {
+          "domain_code": "en",
+          "page_title": "LakeOps_Agent",
+          "count_views": "110",
+          "total_response_size": "4106"
+        },
+        {
+          "domain_code": "commons.m",
+          "page_title": "LakeOps_Logo",
+          "count_views": "30",
+          "total_response_size": "1034"
+        }
+      ]
+    },
+    {
+      "capture_end": "2024-01-01T11:00:00Z",
+      "records": [
+        {
+          "domain_code": "en",
+          "page_title": "LakeOps_Agent",
+          "count_views": "111",
+          "total_response_size": "4107"
+        },
+        {
+          "domain_code": "commons.m",
+          "page_title": "LakeOps_Logo",
+          "count_views": "31",
+          "total_response_size": "1035"
+        }
+      ]
+    },
+    {
+      "capture_end": "2024-01-01T12:00:00Z",
+      "records": [
+        {
+          "domain_code": "en",
+          "page_title": "LakeOps_Agent",
+          "count_views": "112",
+          "total_response_size": "4108"
+        },
+        {
+          "domain_code": "commons.m",
+          "page_title": "LakeOps_Logo",
+          "count_views": "32",
+          "total_response_size": "1036"
+        }
+      ]
+    },
+    {
+      "capture_end": "2024-01-01T13:00:00Z",
+      "records": [
+        {
+          "domain_code": "en",
+          "page_title": "LakeOps_Agent",
+          "count_views": "113",
+          "total_response_size": "4109"
+        },
+        {
+          "domain_code": "commons.m",
+          "page_title": "LakeOps_Logo",
+          "count_views": "33",
+          "total_response_size": "1037"
+        }
+      ]
+    },
+    {
+      "capture_end": "2024-01-01T14:00:00Z",
+      "records": [
+        {
+          "domain_code": "en",
+          "page_title": "LakeOps_Agent",
+          "count_views": "114",
+          "total_response_size": "4110"
+        },
+        {
+          "domain_code": "commons.m",
+          "page_title": "LakeOps_Logo",
+          "count_views": "34",
+          "total_response_size": "1038"
+        }
+      ]
+    },
+    {
+      "capture_end": "2024-01-01T16:00:00Z",
+      "records": [
+        {
+          "domain_code": "en",
+          "page_title": "LakeOps_Agent",
+          "count_views": "116",
+          "total_response_size": "4112"
+        },
+        {
+          "domain_code": "commons.m",
+          "page_title": "LakeOps_Logo",
+          "count_views": "36",
+          "total_response_size": "1040"
+        }
+      ]
+    },
+    {
+      "capture_end": "2024-01-01T17:00:00Z",
+      "records": [
+        {
+          "domain_code": "en",
+          "page_title": "LakeOps_Agent",
+          "count_views": "117",
+          "total_response_size": "4113"
+        },
+        {
+          "domain_code": "commons.m",
+          "page_title": "LakeOps_Logo",
+          "count_views": "37",
+          "total_response_size": "1041"
+        }
+      ]
+    },
+    {
+      "capture_end": "2024-01-01T18:00:00Z",
+      "records": [
+        {
+          "domain_code": "en",
+          "page_title": "LakeOps_Agent",
+          "count_views": "118",
+          "total_response_size": "4114"
+        },
+        {
+          "domain_code": "commons.m",
+          "page_title": "LakeOps_Logo",
+          "count_views": "38",
+          "total_response_size": "1042"
+        }
+      ]
+    },
+    {
+      "capture_end": "2024-01-01T19:00:00Z",
+      "records": [
+        {
+          "domain_code": "en",
+          "page_title": "LakeOps_Agent",
+          "count_views": "119",
+          "total_response_size": "4115"
+        },
+        {
+          "domain_code": "commons.m",
+          "page_title": "LakeOps_Logo",
+          "count_views": "39",
+          "total_response_size": "1043"
+        }
+      ]
+    },
+    {
+      "capture_end": "2024-01-01T20:00:00Z",
+      "records": [
+        {
+          "domain_code": "en",
+          "page_title": "LakeOps_Agent",
+          "count_views": "120",
+          "total_response_size": "4116"
+        },
+        {
+          "domain_code": "commons.m",
+          "page_title": "LakeOps_Logo",
+          "count_views": "40",
+          "total_response_size": "1044"
+        }
+      ]
+    },
+    {
+      "capture_end": "2024-01-01T21:00:00Z",
+      "records": [
+        {
+          "domain_code": "en",
+          "page_title": "LakeOps_Agent",
+          "count_views": "121",
+          "total_response_size": "4117"
+        },
+        {
+          "domain_code": "commons.m",
+          "page_title": "LakeOps_Logo",
+          "count_views": "41",
+          "total_response_size": "1045"
+        }
+      ]
+    },
+    {
+      "capture_end": "2024-01-01T22:00:00Z",
+      "records": [
+        {
+          "domain_code": "en",
+          "page_title": "LakeOps_Agent",
+          "count_views": "122",
+          "total_response_size": "4118"
+        },
+        {
+          "domain_code": "commons.m",
+          "page_title": "LakeOps_Logo",
+          "count_views": "42",
+          "total_response_size": "1046"
+        }
+      ]
+    },
+    {
+      "capture_end": "2024-01-01T23:00:00Z",
+      "records": [
+        {
+          "domain_code": "en",
+          "page_title": "LakeOps_Agent",
+          "count_views": "123",
+          "total_response_size": "4119"
+        },
+        {
+          "domain_code": "commons.m",
+          "page_title": "LakeOps_Logo",
+          "count_views": "43",
+          "total_response_size": "1047"
+        }
+      ]
+    },
+    {
+      "capture_end": "2024-01-02T00:00:00Z",
+      "records": [
+        {
+          "domain_code": "en",
+          "page_title": "LakeOps_Agent",
+          "count_views": "124",
+          "total_response_size": "4120"
+        },
+        {
+          "domain_code": "commons.m",
+          "page_title": "LakeOps_Logo",
+          "count_views": "44",
+          "total_response_size": "1048"
+        }
+      ]
+    }
+  ]
+}
