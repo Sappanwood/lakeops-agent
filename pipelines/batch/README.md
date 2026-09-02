@@ -83,3 +83,34 @@ hard links fail closed instead of falling back to a non-atomic copy.
 Silver has the same trusted-directory, static-symlink-containment, and normal
 concurrent no-clobber boundary. It does not claim resistance to a malicious
 same-user ancestor swap; that stronger boundary needs a native helper.
+
+## Gold metrics and governed views
+
+`gold.py` accepts only a canonical accepted **daily** Silver manifest. It
+rechecks every declared Silver object path, checksum, Parquet schema, row count,
+and continuous 24-hour input set before it aggregates the catalog's
+`kpi.project_daily_views` into `project_traffic_daily`. The published Gold
+Parquet object and manifest are immutable; a repeated run identity fails rather
+than replacing prior evidence.
+
+```bash
+python3 -m pipelines.batch.gold \
+  --silver-manifest data/generated/wikimedia-daily/manifests/pageviews_hourly/partition_date=2026-08-01/<silver-run-id>.json \
+  --destination data/generated/wikimedia-daily \
+  --run-id gold-20260801-01
+```
+
+`open_governed_query()` exposes a narrow Python query API: callers supply an
+exact catalog view name plus an exact subset of that view's catalog fields. It
+does not accept SQL, file paths, relation names, or arbitrary columns. Only the
+catalog views with accepted bound inputs are registered. Until the streaming pipeline
+publishes accepted Silver evidence, views which require editing-activity inputs
+fail closed with `view_unavailable`; no empty relation, null join, or fabricated
+operational record is exposed.
+
+`materialize_fixture_ingestion_freshness()` is the bounded local demonstration
+of operational evidence. It derives `v_ingestion_freshness` from the committed
+`complete_day` or `missing_hour_day` fixture manifest: 24/24 is `complete`,
+while 23/24 is `missing`. A missing-day evidence manifest does not create
+`project_traffic_daily`; queries of that view remain unavailable, keeping a
+pipeline gap distinct from a real traffic change on a complete day.

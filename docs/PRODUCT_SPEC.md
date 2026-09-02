@@ -56,8 +56,15 @@ verifies the newly published complete manifest.
 
 The batch path discovers and downloads 24 hourly pageview files for a UTC day,
 records source provenance and checksums, validates and normalizes the four-field
-source format, writes immutable Parquet objects, and publishes a daily manifest
-only after every expected hour succeeds.
+source format, writes immutable Bronze evidence and Silver Parquet objects, then computes
+the catalog-defined daily project-traffic KPI only after all 24 accepted hours
+succeed. Governed queries can select only catalog-registered views and fields;
+they cannot supply SQL or storage paths.
+
+For the missing-hour demonstration, the committed bounded fixture produces
+governed freshness evidence with 23 accepted objects out of 24 expected. It
+does not produce a partial traffic metric. The complete-day fixture reports
+24/24, so a real traffic change remains distinguishable from an ingestion gap.
 
 ### Streaming pipeline
 

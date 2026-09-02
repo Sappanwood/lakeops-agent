@@ -23,3 +23,8 @@ canonical Bronze manifest identity, source provenance, typed Parquet schema and
 deterministic reads, duplicate primary keys, source-to-manifest checksum joins,
 partition boundaries, bounded-memory normalization, and local no-clobber
 publication.
+
+`test_gold_metrics.py` covers complete-daily Gold KPI aggregation, manifest and
+Parquet cross-validation, catalog-only DuckDB view and field registration,
+rejection of path/view/field injection, and fail-closed handling of
+not-yet-produced streaming inputs.

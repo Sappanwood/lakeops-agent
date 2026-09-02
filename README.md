@@ -34,8 +34,11 @@ and [Cost model](docs/COST_MODEL.md) for the current design.
 The repository currently contains the initial architecture, product contract,
 cost assumptions, component boundaries, Terraform root configuration, catalog
 validation, bounded Wikimedia fixtures, immutable Bronze Pageviews ingestion,
-and local Silver Parquet normalization. Application, Gold query, stream, and
-deployment implementation will be added incrementally.
+local Silver Parquet normalization, complete-day Gold traffic metrics, and a
+catalog-bound local DuckDB query API. Committed fixture scenarios also publish
+freshness evidence that distinguishes a 23/24 missing-hour incident from a
+complete 24/24 day. Application, stream, and deployment implementation will be
+added incrementally.
 
 ## Repository layout
 

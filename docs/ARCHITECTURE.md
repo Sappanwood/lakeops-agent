@@ -87,6 +87,16 @@ external aggregation with run-contained temporary directories provides
 bounded-memory duplicate detection. Invalid input produces separate immutable
 rejection evidence and no partial Silver manifest.
 
+The Gold materializer accepts only a canonical accepted daily Silver manifest.
+It cross-validates every referenced immutable Parquet object and requires all 24
+continuous UTC hours before publishing `project_traffic_daily` with the catalog
+KPI, unit, aggregation, and completeness definition. Its DuckDB query adapter
+registers only catalog-declared logical views and offers only exact registered
+view and field identities; it cannot receive model-supplied SQL or storage
+paths. Before the streaming path produces accepted Silver manifests, views that
+depend on it fail closed as unavailable rather than exposing empty relations,
+null joins, fabricated events, or fabricated health records.
+
 ### Streaming pipeline
 
 A producer consumes Wikimedia recent-change SSE events, applies the contract's
