@@ -32,9 +32,10 @@ and [Cost model](docs/COST_MODEL.md) for the current design.
 ## Repository status
 
 The repository currently contains the initial architecture, product contract,
-cost assumptions, component boundaries, and Terraform root configuration.
-The versioned Wikimedia data contract is defined; application and pipeline
-implementation will be added incrementally.
+cost assumptions, component boundaries, Terraform root configuration, catalog
+validation, bounded Wikimedia fixtures, immutable Bronze Pageviews ingestion,
+and local Silver Parquet normalization. Application, Gold query, stream, and
+deployment implementation will be added incrementally.
 
 ## Repository layout
 

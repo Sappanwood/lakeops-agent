@@ -78,6 +78,15 @@ manifest carries the upstream URL, HTTP source metadata, content SHA-256,
 capture-end and logical-hour timestamps, and run metadata. Cloud publication
 must preserve the same immutable/no-clobber contract through its storage API.
 
+The local Silver normalizer consumes only accepted Bronze manifests. It verifies
+the canonical manifest and manifest-to-object checksum join, applies the
+catalog's Pageviews schema and normalization rules, validates the expected
+continuous profile hour set, and writes typed Parquet records plus an immutable
+Silver manifest only after every selected hour succeeds. A spill-capable DuckDB
+external aggregation with run-contained temporary directories provides
+bounded-memory duplicate detection. Invalid input produces separate immutable
+rejection evidence and no partial Silver manifest.
+
 ### Streaming pipeline
 
 A producer consumes Wikimedia recent-change SSE events, applies the contract's

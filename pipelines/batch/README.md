@@ -39,6 +39,36 @@ Each accepted manifest records source URL, response metadata, SHA-256, retrieval
 time, capture-end label, logical UTC hour, record count, object path, and run
 metadata. It becomes visible only after all source objects are durable.
 
+## Silver normalization
+
+`silver.py` consumes only an accepted Bronze Pageviews manifest at its canonical
+destination-relative identity
+`manifests/pageviews_hourly/partition_date=<date>/<bronze-run-id>.json`. It
+revalidates the profile's exact continuous hour set, canonical Wikimedia source
+URL, runtime provenance, object path, content length, SHA-256, gzip row schema,
+source-to-manifest join, and catalog-defined `pageviews_hourly` schema. It
+decodes each Pageviews title once, normalizes spaces to underscores, derives the
+UTC logical partition from Bronze, validates positive view counts, and detects
+duplicate primary keys through a spill-capable DuckDB external aggregation
+before any Silver output becomes visible.
+
+```bash
+python3 -m pipelines.batch.silver \
+  --bronze-manifest data/generated/wikimedia-tiny/manifests/pageviews_hourly/partition_date=2026-08-01/<bronze-run-id>.json \
+  --destination data/generated/wikimedia-tiny \
+  --run-id silver-20260801-01
+```
+
+The local writer streams normalized records into temporary disk-backed staging,
+uses DuckDB with a configured 256 MB buffer-memory limit and staging-contained
+spill directories for external primary-key aggregation,
+and publishes one immutable typed Parquet object per logical hour below
+`silver/pageviews_hourly/`. It validates each physical Parquet schema and row
+count before publication, then publishes an accepted Silver manifest below
+`manifests/pageviews_hourly/`. A rejected input produces only immutable
+destination-relative rejection evidence below `quarantine/pageviews_hourly/`;
+it never publishes partial Silver data or mutates Bronze bytes.
+
 ## Local publication boundary
 
 The destination must be a trusted local directory. The publisher rejects static
@@ -49,3 +79,7 @@ evidence. This does not resist a malicious same-user process swapping an
 ancestor after inspection; that stronger threat model requires a native helper.
 Hard-link publication is intentionally required, so filesystems without POSIX
 hard links fail closed instead of falling back to a non-atomic copy.
+
+Silver has the same trusted-directory, static-symlink-containment, and normal
+concurrent no-clobber boundary. It does not claim resistance to a malicious
+same-user ancestor swap; that stronger boundary needs a native helper.
