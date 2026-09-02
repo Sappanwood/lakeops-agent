@@ -6,13 +6,17 @@ from http.client import IncompleteRead
 import io
 import json
 import os
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 import tempfile
 import unittest
+from urllib.error import HTTPError
 from unittest import mock
 
+import pipelines.batch.bronze as bronze
 from pipelines.batch.bronze import (
     BronzeIngestionError,
     SourcePartition,
@@ -65,6 +69,23 @@ class _WriteFailure:
 class BronzePageviewsTest(unittest.TestCase):
     partition_date = "2024-01-01"
     now = staticmethod(lambda: datetime(2024, 1, 2, 3, 4, 5, tzinfo=UTC))
+
+    def test_live_downloader_retries_transient_http_status_with_bounded_delay(self) -> None:
+        source_url = expected_source_partitions(self.partition_date, "tiny")[0].source_url
+        retry = HTTPError(source_url, 429, "Too Many Requests", {"Retry-After": "2"}, None)
+        response = _Response(self._valid_gzip())
+        delays: list[float] = []
+        with mock.patch("pipelines.batch.bronze.urlopen", side_effect=[retry, response]) as request:
+            result = bronze._http_downloader(source_url, sleep=delays.append)
+        self.assertIs(result, response)
+        self.assertEqual(request.call_count, 2)
+        self.assertEqual(delays, [2.0])
+
+        permanent = HTTPError(source_url, 404, "Not Found", {}, None)
+        with mock.patch("pipelines.batch.bronze.urlopen", side_effect=permanent):
+            with self.assertRaises(BronzeIngestionError) as raised:
+                bronze._http_downloader(source_url, sleep=delays.append)
+        self.assertEqual(raised.exception.code, "source_unavailable")
 
     def test_tiny_ingestion_preserves_source_provenance_logical_time_and_run_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -140,6 +161,56 @@ class BronzePageviewsTest(unittest.TestCase):
                     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
                     self.assertEqual(len(manifest["source_objects"]), expected_count)
                     self.assertTrue(all((root / profile / source["object_path"]).is_file() for source in manifest["source_objects"]))
+
+    def test_bounded_parallel_download_preserves_manifest_order_and_rejects_invalid_limits(self) -> None:
+        active = 0
+        peak = 0
+        lock = threading.Lock()
+
+        def downloader(_: str) -> _Response:
+            nonlocal active, peak
+            with lock:
+                active += 1
+                peak = max(peak, active)
+            try:
+                time.sleep(0.01)
+                return _Response(self._valid_gzip())
+            finally:
+                with lock:
+                    active -= 1
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            manifest_path = ingest_pageviews(
+                self.partition_date,
+                "demo",
+                root,
+                downloader=downloader,
+                run_id="parallel-run",
+                now=self.now,
+                download_workers=3,
+            )
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertGreaterEqual(peak, 2)
+            self.assertLessEqual(peak, 3)
+            self.assertEqual(
+                [item["source_url"] for item in manifest["source_objects"]],
+                [item.source_url for item in expected_source_partitions(self.partition_date, "demo")],
+            )
+
+        for workers in (0, True, 9):
+            with self.subTest(workers=workers), tempfile.TemporaryDirectory() as temporary_directory:
+                with self.assertRaises(BronzeIngestionError) as raised:
+                    ingest_pageviews(
+                        self.partition_date,
+                        "tiny",
+                        Path(temporary_directory),
+                        downloader=self._valid_downloader(),
+                        run_id="invalid-workers",
+                        now=self.now,
+                        download_workers=workers,
+                    )
+                self.assertEqual(raised.exception.code, "invalid_download_workers")
 
     def test_year_boundary_uses_next_capture_end_but_logical_day_hour_twenty_three(self) -> None:
         partition_date = "2024-12-31"

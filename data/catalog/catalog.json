@@ -108,7 +108,7 @@
       "commons.wikimedia.org": "commons.m"
     },
     "project_code_rule": "Pageviews uses domain_code directly. Recent-change records are joinable only when server_name has an exact entry in stream_project_allowlist; unmapped hosts remain valid stream evidence but do not enter cross-source views.",
-    "page_title_rule": "Decode the Pageviews page_title once from its source encoding and normalize spaces to underscores. Normalize recent-change title spaces to underscores. Preserve case and all other characters.",
+    "page_title_rule": "Treat the Pageviews page_title as an already URL-decoded canonical DBkey, preserve literal percent characters, and defensively normalize spaces to underscores. Normalize recent-change title spaces to underscores. Preserve case and all other characters.",
     "join_rule": "Cross-source joins use canonical project_code, canonical page_title, and the UTC window end after both source-specific normalization rules succeed."
   },
   "privacy": {

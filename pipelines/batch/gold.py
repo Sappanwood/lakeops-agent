@@ -346,6 +346,7 @@ def _load_accepted_silver(path: Path, destination: Path, contract: _Contract) ->
 
 def _write_gold_parquet(silver: _SilverInput, contract: _Contract, staging: Path, computed_at: datetime) -> tuple[Path, int]:
     output = staging / "project_traffic_daily.parquet"
+    unique_counts = staging / "project_unique_page_counts.parquet"
     connection = duckdb.connect()
     try:
         _configure_duckdb(connection, staging / "duckdb-gold-tmp")
@@ -354,13 +355,29 @@ def _write_gold_parquet(silver: _SilverInput, contract: _Contract, staging: Path
         computed = _sql_literal(_timestamp(computed_at))
         connection.execute(
             "COPY ("
-            "SELECT project_code::VARCHAR AS project_code, partition_date::DATE AS partition_date, "
-            "sum(view_count)::BIGINT AS view_count, sum(response_bytes)::BIGINT AS response_bytes, "
-            "count(DISTINCT page_title)::BIGINT AS unique_page_count, count(DISTINCT hour)::INTEGER AS input_hour_count, "
-            f"count(DISTINCT hour) = {contract.daily_expected_hours} AS is_complete, "
-            f"[{manifest_ids}]::VARCHAR[] AS input_manifest_ids, CAST({computed} AS TIMESTAMP) AS computed_at "
+            "WITH ordered AS ("
+            "SELECT project_code, "
+            "CASE WHEN lag(project_code) OVER keys IS DISTINCT FROM project_code "
+            "OR lag(page_title) OVER keys IS DISTINCT FROM page_title THEN 1 ELSE 0 END AS is_new "
             f"FROM read_parquet([{paths}], hive_partitioning = false) "
-            "GROUP BY project_code, partition_date"
+            "WINDOW keys AS (ORDER BY project_code, page_title)"
+            ") "
+            "SELECT project_code, sum(is_new)::BIGINT AS unique_page_count "
+            "FROM ordered GROUP BY project_code"
+            f") TO {_sql_literal(str(unique_counts))} (FORMAT parquet, COMPRESSION zstd)"
+        )
+        connection.execute(
+            "COPY ("
+            "WITH daily AS ("
+            "SELECT project_code, partition_date, sum(view_count)::BIGINT AS view_count, "
+            "sum(response_bytes)::BIGINT AS response_bytes "
+            f"FROM read_parquet([{paths}], hive_partitioning = false) GROUP BY project_code, partition_date"
+            ") "
+            "SELECT daily.project_code::VARCHAR AS project_code, daily.partition_date::DATE AS partition_date, "
+            "daily.view_count, daily.response_bytes, unique_counts.unique_page_count, "
+            f"{contract.daily_expected_hours}::INTEGER AS input_hour_count, true AS is_complete, "
+            f"[{manifest_ids}]::VARCHAR[] AS input_manifest_ids, CAST({computed} AS TIMESTAMP) AS computed_at "
+            f"FROM daily JOIN read_parquet({_sql_literal(str(unique_counts))}) AS unique_counts USING (project_code)"
             f") TO {_sql_literal(str(output))} (FORMAT parquet, COMPRESSION zstd)"
         )
         expected = _physical_types(contract.datasets["project_traffic_daily"])
@@ -403,7 +420,11 @@ def _publish_gold(destination: Path, run_id: str, silver: _SilverInput, contract
         "freshness": {"definition": contract.datasets["project_traffic_daily"]["freshness"], "is_complete": True},
         "input_manifest": {"dataset_id": "pageviews_hourly", "manifest_id": silver.manifest_id, "path": silver.manifest_relative, "sha256": silver.manifest_sha256},
         "input_manifest_ids": [silver.manifest_id],
-        "processing": {"input_hour_count": contract.daily_expected_hours, "duckdb_buffer_memory_limit": DUCKDB_MEMORY_LIMIT},
+        "processing": {
+            "input_hour_count": contract.daily_expected_hours,
+            "duckdb_buffer_memory_limit": DUCKDB_MEMORY_LIMIT,
+            "unique_page_count_strategy": "external_sort_adjacent_keys",
+        },
         "run": {"run_id": run_id, "started_at": _timestamp(started_at), "finished_at": _timestamp(finished_at), "row_count": row_count},
         "output_objects": [{"object_path": output_relative.as_posix(), "record_count": row_count, "sha256": _sha256(staged), "format": "application/vnd.apache.parquet"}],
     }

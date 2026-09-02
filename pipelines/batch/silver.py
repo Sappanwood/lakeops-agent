@@ -15,7 +15,6 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
-from urllib.parse import unquote_to_bytes
 
 import duckdb
 
@@ -27,7 +26,6 @@ BRONZE_MANIFEST_SCHEMA = "lakeops/bronze-pageviews-manifest@1"
 SILVER_MANIFEST_SCHEMA = "lakeops/silver-pageviews-manifest@1"
 REJECTION_SCHEMA = "lakeops/silver-pageviews-rejection@1"
 RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
-INVALID_PERCENT_ESCAPE = re.compile(r"%(?![0-9A-Fa-f]{2})")
 SUPPORTED_PROFILES = frozenset({"tiny", "demo", "daily"})
 DUCKDB_MEMORY_LIMIT = "256MB"
 PHYSICAL_TYPES = {
@@ -391,13 +389,7 @@ def _normalize_record(fields: Sequence[str], source: _BronzeObject, partition_da
 
 
 def _normalize_page_title(source_title: str) -> str:
-    if INVALID_PERCENT_ESCAPE.search(source_title):
-        raise SilverNormalizationError("invalid_page_title", "page_title has an invalid percent escape")
-    try:
-        decoded = unquote_to_bytes(source_title).decode("utf-8")
-    except UnicodeDecodeError as error:
-        raise SilverNormalizationError("invalid_page_title", "page_title is not valid UTF-8 after decoding") from error
-    normalized = decoded.replace(" ", "_")
+    normalized = source_title.replace(" ", "_")
     if not normalized:
         raise SilverNormalizationError("invalid_page_title", "page_title is empty after normalization")
     return normalized
@@ -420,33 +412,35 @@ def _validate_record_contract(record: Mapping[str, Any], schema: Mapping[str, Ma
 
 def _assert_no_duplicate_primary_keys(outputs: Sequence[_StagedOutput], staging: Path) -> _AggregationEvidence:
     temp_directory = staging / "duckdb-dedupe-tmp"
-    profile_path = staging / "duckdb-dedupe-profile.json"
     connection = duckdb.connect()
     try:
         _configure_duckdb(connection, temp_directory)
         connection.execute("SET enable_profiling = 'json'")
-        connection.execute(f"SET profiling_output = {_sql_literal(str(profile_path))}")
-        input_paths = ",".join(_sql_literal(str(output.json_path)) for output in outputs)
-        duplicate = connection.execute(
-            "SELECT project_code, page_title, CAST(window_end AS TIMESTAMP) AS window_end "
-            f"FROM read_json([{input_paths}]) "
-            "GROUP BY project_code, page_title, window_end "
-            "HAVING count(*) > 1 "
-            "ORDER BY project_code, page_title, window_end LIMIT 1"
-        ).fetchone()
-        if duplicate is not None:
-            project_code, page_title, window_end = duplicate
-            raise SilverNormalizationError(
-                "duplicate_primary_key",
-                f"duplicate pageviews_hourly key {(project_code, page_title, _timestamp(window_end.replace(tzinfo=UTC)))!r}",
-            )
-        try:
-            profile = json.loads(profile_path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
-            raise SilverNormalizationError("aggregation_profile_failure", "cannot read duplicate aggregation profile") from error
-        peak_temp_directory_bytes = profile.get("system_peak_temp_dir_size")
-        if not _is_integer(peak_temp_directory_bytes) or peak_temp_directory_bytes < 0:
-            raise SilverNormalizationError("aggregation_profile_failure", "duplicate aggregation profile has invalid spill metric")
+        peak_temp_directory_bytes = 0
+        for output in outputs:
+            profile_path = staging / f"duckdb-dedupe-profile-{output.source.logical_hour:%H}.json"
+            connection.execute(f"SET profiling_output = {_sql_literal(str(profile_path))}")
+            duplicate = connection.execute(
+                "SELECT project_code, page_title, CAST(window_end AS TIMESTAMP) AS window_end "
+                f"FROM read_json({_sql_literal(str(output.json_path))}) "
+                "GROUP BY project_code, page_title, window_end "
+                "HAVING count(*) > 1 "
+                "ORDER BY project_code, page_title, window_end LIMIT 1"
+            ).fetchone()
+            if duplicate is not None:
+                project_code, page_title, window_end = duplicate
+                raise SilverNormalizationError(
+                    "duplicate_primary_key",
+                    f"duplicate pageviews_hourly key {(project_code, page_title, _timestamp(window_end.replace(tzinfo=UTC)))!r}",
+                )
+            try:
+                profile = json.loads(profile_path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+                raise SilverNormalizationError("aggregation_profile_failure", "cannot read duplicate aggregation profile") from error
+            profile_peak = profile.get("system_peak_temp_dir_size")
+            if not _is_integer(profile_peak) or profile_peak < 0:
+                raise SilverNormalizationError("aggregation_profile_failure", "duplicate aggregation profile has invalid spill metric")
+            peak_temp_directory_bytes = max(peak_temp_directory_bytes, profile_peak)
         return _AggregationEvidence(peak_temp_directory_bytes)
     except duckdb.Error as error:
         raise SilverNormalizationError("parquet_conversion_failure", str(error)) from error
@@ -600,6 +594,15 @@ def _publish_rejection(
     try:
         final_run.mkdir()
     except FileExistsError as publish_error:
+        if _matches_existing_rejection(
+            final_run,
+            partition_date,
+            run_id,
+            manifest_relative,
+            raw_manifest,
+            manifest_id,
+        ):
+            return
         raise SilverNormalizationError("publication_conflict", "rejection run already exists") from publish_error
     try:
         evidence = {
@@ -627,6 +630,38 @@ def _publish_rejection(
     except OSError as publish_error:
         _cleanup_owned([final_run], None)
         raise SilverNormalizationError("quarantine_publication_failure", "cannot publish rejection evidence") from publish_error
+
+
+def _matches_existing_rejection(
+    final_run: Path,
+    partition_date: str,
+    run_id: str,
+    manifest_relative: Path,
+    raw_manifest: bytes,
+    manifest_id: str | None,
+) -> bool:
+    rejection = final_run / "rejection.json"
+    if final_run.is_symlink() or not final_run.is_dir() or rejection.is_symlink() or not rejection.is_file():
+        return False
+    try:
+        evidence = json.loads(rejection.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return False
+    return (
+        isinstance(evidence, dict)
+        and evidence.get("schema") == REJECTION_SCHEMA
+        and evidence.get("status") == "rejected"
+        and evidence.get("dataset_id") == "pageviews_hourly"
+        and evidence.get("partition_date") == partition_date
+        and evidence.get("input_manifest")
+        == {
+            "manifest_id": manifest_id,
+            "path": manifest_relative.as_posix(),
+            "sha256": hashlib.sha256(raw_manifest).hexdigest(),
+        }
+        and isinstance(evidence.get("run"), dict)
+        and evidence["run"].get("run_id") == run_id
+    )
 
 
 def _source_url(base_url: str, capture_end: datetime) -> str:

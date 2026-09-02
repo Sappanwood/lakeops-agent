@@ -46,11 +46,15 @@ destination-relative identity
 `manifests/pageviews_hourly/partition_date=<date>/<bronze-run-id>.json`. It
 revalidates the profile's exact continuous hour set, canonical Wikimedia source
 URL, runtime provenance, object path, content length, SHA-256, gzip row schema,
-source-to-manifest join, and catalog-defined `pageviews_hourly` schema. It
-decodes each Pageviews title once, normalizes spaces to underscores, derives the
-UTC logical partition from Bronze, validates positive view counts, and detects
-duplicate primary keys through a spill-capable DuckDB external aggregation
-before any Silver output becomes visible.
+source-to-manifest join, and catalog-defined `pageviews_hourly` schema. Wikimedia
+already publishes `page_title` as a URL-decoded canonical DBkey, so Silver
+preserves literal percent characters and only normalizes spaces to underscores
+defensively. It derives the UTC logical partition from Bronze, validates
+positive view counts, and detects duplicate primary keys one hour at a time
+through spill-capable DuckDB external aggregation before any Silver output
+becomes visible. Cross-file collisions are impossible after the manifest's
+unique continuous logical-hour set is validated because `window_end` is part of
+the primary key.
 
 ```bash
 python3 -m pipelines.batch.silver \
@@ -61,7 +65,7 @@ python3 -m pipelines.batch.silver \
 
 The local writer streams normalized records into temporary disk-backed staging,
 uses DuckDB with a configured 256 MB buffer-memory limit and staging-contained
-spill directories for external primary-key aggregation,
+spill directories for per-hour external primary-key aggregation,
 and publishes one immutable typed Parquet object per logical hour below
 `silver/pageviews_hourly/`. It validates each physical Parquet schema and row
 count before publication, then publishes an accepted Silver manifest below
@@ -91,7 +95,11 @@ rechecks every declared Silver object path, checksum, Parquet schema, row count,
 and continuous 24-hour input set before it aggregates the catalog's
 `kpi.project_daily_views` into `project_traffic_daily`. The published Gold
 Parquet object and manifest are immutable; a repeated run identity fails rather
-than replacing prior evidence.
+than replacing prior evidence. Exact daily unique-page counts use an external
+sort over `(project_code, page_title)` with a 256 MB DuckDB buffer limit rather
+than an unbounded distinct hash table. `input_hour_count` and `is_complete`
+describe the accepted 24-hour input partition; a project does not need traffic
+in every hour to be complete.
 
 ```bash
 python3 -m pipelines.batch.gold \
@@ -114,3 +122,50 @@ of operational evidence. It derives `v_ingestion_freshness` from the committed
 while 23/24 is `missing`. A missing-day evidence manifest does not create
 `project_traffic_daily`; queries of that view remain unavailable, keeping a
 pipeline gap distinct from a real traffic change on a complete day.
+
+## End-to-end local verification
+
+`local.py` coordinates the daily Bronze, Silver, and Gold stages and publishes
+`lakeops/batch-pipeline-manifest@1` only after it has revalidated the complete
+manifest lineage, all 49 immutable objects, checksums, row counts, canonical
+paths, and the governed Gold query surface. It applies a durability barrier to
+all referenced objects and stage manifests before the final manifest becomes
+visible.
+
+This offline command runs the committed complete-day fixture through the real
+Bronze, Silver, and Gold implementations without Azure credentials or network
+access:
+
+```bash
+uv run python -m pipelines.batch.local \
+  --partition-date 2024-01-01 \
+  --source fixture \
+  --destination data/generated/wikimedia-local \
+  --run-id local-20240101
+```
+
+Use the same coordinator with `--source live` and an available Wikimedia date
+for the real daily input, which is commonly around 1–2 GB compressed:
+
+```bash
+uv run python -m pipelines.batch.local \
+  --partition-date 2026-08-01 \
+  --source live \
+  --destination data/generated/wikimedia-live-20260801 \
+  --run-id live-20260801 \
+  --download-workers 2
+```
+
+`--download-workers` is bounded from 1 through 8. The standalone Bronze command
+remains serial by default; the end-to-end coordinator defaults to two workers
+so the daily profile does not serialize 24 independent HTTP transfers or create
+an unnecessarily aggressive burst. Live HTTP 429 and selected 5xx responses are
+retried up to four attempts with bounded exponential or `Retry-After` delays.
+
+The final manifest is written below
+`manifests/batch_pipeline/partition_date=<date>/`. A failed stage cannot publish
+that authoritative manifest or replace an earlier accepted run. If the process
+is interrupted before final publication, rerunning the same command and run ID
+reuses only canonical stage manifests and objects that pass full validation;
+corrupt or missing evidence fails closed. Repeating an already accepted run ID
+returns `publication_conflict`.

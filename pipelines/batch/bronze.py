@@ -11,17 +11,23 @@ import os
 import re
 import shutil
 import tempfile
-from collections.abc import Callable, Iterable, Mapping, Sequence
+import time
+from collections.abc import Callable, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import BinaryIO, Protocol
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 
 PAGEVIEWS_BASE_URL = "https://dumps.wikimedia.org/other/pageviews"
+BRONZE_MANIFEST_SCHEMA = "lakeops/bronze-pageviews-manifest@1"
 PROFILE_HOURS = {"tiny": 1, "demo": 6, "daily": 24}
 RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+RETRYABLE_HTTP_STATUS = frozenset({429, 500, 502, 503, 504})
+HTTP_MAX_ATTEMPTS = 4
 
 
 class BronzeIngestionError(ValueError):
@@ -91,6 +97,7 @@ def ingest_pageviews(
     source_partitions: Sequence[SourcePartition] | None = None,
     run_id: str | None = None,
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
+    download_workers: int = 1,
 ) -> Path:
     """Download, validate, and publish one immutable pageviews bronze manifest.
 
@@ -99,6 +106,8 @@ def ingest_pageviews(
     use POSIX hard-link publication for normal-concurrency no-clobber behavior.
     """
 
+    if not isinstance(download_workers, int) or isinstance(download_workers, bool) or not 1 <= download_workers <= 8:
+        raise BronzeIngestionError("invalid_download_workers", "download_workers must be an integer from 1 through 8")
     expected = expected_source_partitions(partition_date, profile)
     selected = list(source_partitions) if source_partitions is not None else expected
     _validate_selected_partitions(selected, expected)
@@ -117,7 +126,7 @@ def ingest_pageviews(
     try:
         with tempfile.TemporaryDirectory(prefix="lakeops-bronze-", dir=destination) as temporary_directory:
             staging = Path(temporary_directory)
-            source_objects = _stage_sources(selected, staging, active_downloader, now)
+            source_objects = _stage_sources(selected, staging, active_downloader, now, download_workers)
             manifest = _build_manifest(partition_date, profile, identifier, started_at, source_objects, now())
             staged_manifest = staging / "manifest.json"
             staged_manifest.write_text(_canonical_json(manifest) + "\n", encoding="utf-8")
@@ -129,36 +138,52 @@ def ingest_pageviews(
 
 
 def _stage_sources(
-    source_partitions: Iterable[SourcePartition],
+    source_partitions: Sequence[SourcePartition],
     staging: Path,
     downloader: Callable[[str], DownloadResponse],
     now: Callable[[], datetime],
+    download_workers: int,
 ) -> list[dict[str, object]]:
-    source_objects: list[dict[str, object]] = []
-    for index, partition in enumerate(source_partitions):
-        capture_end = _parse_timestamp(partition.capture_end, "invalid_source_partition")
-        filename = f"pageviews-{capture_end:%Y%m%d-%H%M%S}.gz"
-        staged_object = staging / filename
-        metadata = _download_to_staging(partition.source_url, staged_object, downloader, now)
-        record_count = _validate_pageviews_gzip(staged_object)
-        logical_hour = capture_end - timedelta(hours=1)
-        source_objects.append(
-            {
-                "capture_end": _timestamp(capture_end),
-                "logical_hour": _timestamp(logical_hour),
-                "source_url": partition.source_url,
-                "source_last_modified": metadata["source_last_modified"],
-                "source_etag": metadata["source_etag"],
-                "source_content_length": metadata["source_content_length"],
-                "source_sha256": metadata["source_sha256"],
-                "retrieved_at": metadata["retrieved_at"],
-                "downloaded_byte_count": metadata["source_content_length"],
-                "record_count": record_count,
-                "staged_filename": filename,
-                "source_index": index,
-            }
-        )
-    return source_objects
+    if download_workers == 1:
+        return [
+            _stage_source(index, partition, staging, downloader, now)
+            for index, partition in enumerate(source_partitions)
+        ]
+    with ThreadPoolExecutor(max_workers=download_workers, thread_name_prefix="lakeops-bronze") as executor:
+        futures = [
+            executor.submit(_stage_source, index, partition, staging, downloader, now)
+            for index, partition in enumerate(source_partitions)
+        ]
+        return [future.result() for future in futures]
+
+
+def _stage_source(
+    index: int,
+    partition: SourcePartition,
+    staging: Path,
+    downloader: Callable[[str], DownloadResponse],
+    now: Callable[[], datetime],
+) -> dict[str, object]:
+    capture_end = _parse_timestamp(partition.capture_end, "invalid_source_partition")
+    filename = f"pageviews-{capture_end:%Y%m%d-%H%M%S}.gz"
+    staged_object = staging / filename
+    metadata = _download_to_staging(partition.source_url, staged_object, downloader, now)
+    record_count = _validate_pageviews_gzip(staged_object)
+    logical_hour = capture_end - timedelta(hours=1)
+    return {
+        "capture_end": _timestamp(capture_end),
+        "logical_hour": _timestamp(logical_hour),
+        "source_url": partition.source_url,
+        "source_last_modified": metadata["source_last_modified"],
+        "source_etag": metadata["source_etag"],
+        "source_content_length": metadata["source_content_length"],
+        "source_sha256": metadata["source_sha256"],
+        "retrieved_at": metadata["retrieved_at"],
+        "downloaded_byte_count": metadata["source_content_length"],
+        "record_count": record_count,
+        "staged_filename": filename,
+        "source_index": index,
+    }
 
 
 def _download_to_staging(
@@ -263,7 +288,7 @@ def _build_manifest(
         )
         published_objects.append({key: value for key, value in source.items() if key not in {"staged_filename", "source_index"}} | {"object_path": object_path})
     return {
-        "schema": "lakeops/bronze-pageviews-manifest@1",
+        "schema": BRONZE_MANIFEST_SCHEMA,
         "manifest_id": run_id,
         "status": "accepted",
         "source_id": "wikimedia_pageviews",
@@ -396,12 +421,35 @@ def _remove_owned_directory(path: Path) -> None:
         raise BronzeIngestionError("publication_cleanup_failure", f"cannot clean incomplete run {path}: {error}") from error
 
 
-def _http_downloader(source_url: str) -> DownloadResponse:
+def _http_downloader(
+    source_url: str,
+    *,
+    sleep: Callable[[float], None] = time.sleep,
+) -> DownloadResponse:
     request = Request(source_url, headers={"User-Agent": "lakeops-agent/0.1 bronze-ingestion"})
-    try:
-        return urlopen(request, timeout=60)
-    except OSError as error:
-        raise BronzeIngestionError("source_unavailable", f"cannot fetch {source_url}: {error}") from error
+    for attempt in range(HTTP_MAX_ATTEMPTS):
+        try:
+            return urlopen(request, timeout=60)
+        except HTTPError as error:
+            if error.code not in RETRYABLE_HTTP_STATUS or attempt == HTTP_MAX_ATTEMPTS - 1:
+                raise BronzeIngestionError("source_unavailable", f"cannot fetch {source_url}: {error}") from error
+            sleep(_retry_delay(error, attempt))
+        except OSError as error:
+            raise BronzeIngestionError("source_unavailable", f"cannot fetch {source_url}: {error}") from error
+    raise AssertionError("HTTP retry loop must return or raise")
+
+
+def _retry_delay(error: HTTPError, attempt: int) -> float:
+    retry_after = error.headers.get("Retry-After") if error.headers is not None else None
+    if isinstance(retry_after, str):
+        try:
+            seconds = float(retry_after)
+        except ValueError:
+            pass
+        else:
+            if 0 <= seconds <= 30:
+                return seconds
+    return float(2**attempt)
 
 
 def _required_content_length(headers: Mapping[str, str], source_url: str) -> int:

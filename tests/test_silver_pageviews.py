@@ -49,6 +49,21 @@ class _Response:
 class SilverPageviewsTest(unittest.TestCase):
     now = staticmethod(lambda: datetime(2024, 1, 2, 3, 4, 5, tzinfo=UTC))
 
+    def test_wikimedia_canonical_dbkey_preserves_literal_percent(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            bronze = self._ingest(
+                root,
+                "2024-01-01",
+                "tiny",
+                "literal-percent-bronze",
+                body=gzip.compress(b"en 100%_Real 7 70\n", mtime=0),
+            )
+            silver = normalize_pageviews(bronze, root, run_id="literal-percent-silver", now=self.now)
+            manifest = json.loads(silver.read_text(encoding="utf-8"))
+            output = root / manifest["output_objects"][0]["object_path"]
+            self.assertEqual(duckdb.sql(f"SELECT page_title FROM read_parquet('{output}')").fetchall(), [("100%_Real",)])
+
     def test_accepted_canonical_bronze_manifest_publishes_typed_parquet(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -207,6 +222,36 @@ class SilverPageviewsTest(unittest.TestCase):
                 body=gzip.compress(b"en LakeOps_Agent 0 4097\n", mtime=0),
             )
             self._assert_rejected(quality_manifest, root, "silver-quality-failure", "invalid_view_count")
+
+    def test_retry_preserves_existing_rejection_without_masking_current_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            bronze_manifest = self._ingest(
+                root,
+                "2024-01-01",
+                "tiny",
+                "retry-failure",
+                body=gzip.compress(b"en Broken 0 10\n", mtime=0),
+            )
+
+            with self.assertRaises(SilverNormalizationError) as first:
+                normalize_pageviews(bronze_manifest, root, run_id="silver-retry-failure", now=self.now)
+            self.assertEqual(first.exception.code, "invalid_view_count")
+            rejection = (
+                root
+                / "quarantine"
+                / "pageviews_hourly"
+                / "partition_date=2024-01-01"
+                / "run_id=silver-retry-failure"
+                / "rejection.json"
+            )
+            before = rejection.read_bytes()
+
+            with self.assertRaises(SilverNormalizationError) as retry:
+                normalize_pageviews(bronze_manifest, root, run_id="silver-retry-failure", now=self.now)
+
+            self.assertEqual(retry.exception.code, "invalid_view_count")
+            self.assertEqual(rejection.read_bytes(), before)
 
     def test_year_boundary_uses_logical_partition_not_capture_end_date(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -387,7 +432,7 @@ class SilverPageviewsTest(unittest.TestCase):
         path.write_text(json.dumps(document), encoding="utf-8")
 
     def _ingest(self, root: Path, partition_date: str, profile: str, run_id: str, *, body: bytes | None = None) -> Path:
-        source_body = body or gzip.compress(b"en LakeOps%20Agent 101 4097\nen Main_Page 102 512\n", mtime=0)
+        source_body = body or gzip.compress(b"en LakeOps_Agent 101 4097\nen Main_Page 102 512\n", mtime=0)
 
         def downloader(_: str) -> _Response:
             return _Response(source_body)

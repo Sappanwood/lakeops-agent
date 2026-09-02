@@ -82,20 +82,39 @@ The local Silver normalizer consumes only accepted Bronze manifests. It verifies
 the canonical manifest and manifest-to-object checksum join, applies the
 catalog's Pageviews schema and normalization rules, validates the expected
 continuous profile hour set, and writes typed Parquet records plus an immutable
-Silver manifest only after every selected hour succeeds. A spill-capable DuckDB
-external aggregation with run-contained temporary directories provides
-bounded-memory duplicate detection. Invalid input produces separate immutable
-rejection evidence and no partial Silver manifest.
+Silver manifest only after every selected hour succeeds. Per-hour,
+spill-capable DuckDB external aggregation with run-contained temporary
+directories provides bounded-memory duplicate detection after unique continuous
+logical hours make cross-file primary-key collisions impossible. Invalid input
+produces separate immutable rejection evidence and no partial Silver manifest.
+
+Wikimedia Pageviews publishes `page_title` as an already URL-decoded canonical
+DBkey. Silver therefore preserves literal percent characters and does not apply
+a second URL decode; it only normalizes spaces to underscores defensively so the
+identity remains compatible with normalized RecentChange titles.
 
 The Gold materializer accepts only a canonical accepted daily Silver manifest.
 It cross-validates every referenced immutable Parquet object and requires all 24
 continuous UTC hours before publishing `project_traffic_daily` with the catalog
-KPI, unit, aggregation, and completeness definition. Its DuckDB query adapter
+KPI, unit, aggregation, and completeness definition. Exact unique-page counts
+use a disk-backed external sort under a 256 MB DuckDB buffer cap. Completeness
+describes the accepted daily input partition, not whether each project emitted
+traffic in every hour. Its DuckDB query adapter
 registers only catalog-declared logical views and offers only exact registered
 view and field identities; it cannot receive model-supplied SQL or storage
 paths. Before the streaming path produces accepted Silver manifests, views that
 depend on it fail closed as unavailable rather than exposing empty relations,
 null joins, fabricated events, or fabricated health records.
+
+The local batch coordinator runs those three stage publishers with one immutable
+pipeline identity. It validates the exact Bronze-to-Silver-to-Gold manifest
+lineage, canonical paths, checksums, object and row counts, physical Gold query
+surface, and complete 24-hour partition. It then fsyncs every referenced object,
+stage manifest, and containing directory before publishing the final batch
+manifest with a POSIX hard link. Stage evidence from an interrupted run remains
+immutable and is revalidated for recovery; it is not an accepted end-to-end run
+until the final batch manifest exists. Concurrent or repeated publication cannot
+replace an existing accepted batch manifest.
 
 ### Streaming pipeline
 

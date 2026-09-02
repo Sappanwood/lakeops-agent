@@ -91,6 +91,8 @@ class GoldMetricsTests(unittest.TestCase):
             self.assertTrue(manifest["freshness"]["is_complete"])
             self.assertEqual(manifest["input_manifest_ids"], ["silver-daily"])
             self.assertEqual(manifest["processing"]["input_hour_count"], 24)
+            self.assertEqual(manifest["processing"]["duckdb_buffer_memory_limit"], "256MB")
+            self.assertEqual(manifest["processing"]["unique_page_count_strategy"], "external_sort_adjacent_keys")
             self.assertNotIn(str(root), json.dumps(manifest))
             with self.assertRaises(GoldMaterializationError) as repeated:
                 materialize_project_traffic_daily(silver_manifest, root, run_id="gold-daily", now=self.now)
@@ -108,6 +110,34 @@ class GoldMetricsTests(unittest.TestCase):
                     with self.subTest(unavailable=unavailable), self.assertRaises(GovernedQueryError) as unavailable_error:
                         session.query(unavailable, ["project_code"] if unavailable != "v_pipeline_runs" else ["run_id"])
                     self.assertEqual(unavailable_error.exception.code, "view_unavailable")
+
+    def test_complete_partition_marks_sparse_project_complete(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+
+            def downloader(url: str) -> _Response:
+                body = b"en Main_Page 1 10\n"
+                if url.endswith("010000.gz"):
+                    body += b"rare Sparse_Page 2 20\n"
+                return _Response(gzip.compress(body, mtime=0))
+
+            bronze = ingest_pageviews(
+                "2024-01-01",
+                "daily",
+                root,
+                downloader=downloader,
+                run_id="sparse-bronze",
+                now=self.now,
+            )
+            silver = normalize_pageviews(bronze, root, run_id="sparse-silver", now=self.now)
+            gold = materialize_project_traffic_daily(silver, root, run_id="sparse-gold", now=self.now)
+
+            with open_governed_query(gold, root) as session:
+                rows = session.query(
+                    "v_project_traffic_daily",
+                    ["project_code", "input_hour_count", "is_complete"],
+                )
+            self.assertIn(("rare", 24, True), rows)
 
     def test_unaccepted_incomplete_or_noncanonical_inputs_never_publish_gold_or_open_query_surface(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -238,7 +268,7 @@ class GoldMetricsTests(unittest.TestCase):
         return normalize_pageviews(self._ingest(root, "daily", "daily-bronze"), root, run_id="silver-daily", now=self.now)
 
     def _ingest(self, root: Path, profile: str, run_id: str) -> Path:
-        body = gzip.compress(b"en LakeOps%20Agent 101 4097\nen Main_Page 102 512\n", mtime=0)
+        body = gzip.compress(b"en LakeOps_Agent 101 4097\nen Main_Page 102 512\n", mtime=0)
         return ingest_pageviews(
             "2024-01-01",
             profile,

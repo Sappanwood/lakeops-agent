@@ -26,5 +26,12 @@ publication.
 
 `test_gold_metrics.py` covers complete-daily Gold KPI aggregation, manifest and
 Parquet cross-validation, catalog-only DuckDB view and field registration,
-rejection of path/view/field injection, and fail-closed handling of
-not-yet-produced streaming inputs.
+bounded external-sort unique counts, sparse-project partition completeness,
+rejection of path/view/field injection, and fail-closed handling of not-yet-produced
+streaming inputs.
+
+`test_batch_pipeline.py` exercises the complete local Bronze-to-Silver-to-Gold
+command and authoritative batch manifest. It covers successful durability-bound
+publication, invalid source data, repeated and concurrent no-clobber behavior,
+recovery after interruption, and rejection of corrupted stage evidence before
+the final manifest becomes visible.

@@ -67,6 +67,8 @@ class CatalogContractTest(unittest.TestCase):
         )
         self.assertIn("canonical project_code", normalization["join_rule"])
         self.assertIn("canonical page_title", normalization["join_rule"])
+        self.assertIn("already URL-decoded canonical DBkey", normalization["page_title_rule"])
+        self.assertIn("preserve literal percent", normalization["page_title_rule"])
 
 
 if __name__ == "__main__":
