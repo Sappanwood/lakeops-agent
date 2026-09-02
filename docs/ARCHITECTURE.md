@@ -70,6 +70,14 @@ for a UTC day, download and checksum them, validate data against the versioned
 contract, produce partitioned Parquet, and atomically publish a daily manifest
 after all hourly output objects are durable.
 
+The first implementation publishes raw gzip evidence to Bronze before Silver
+normalization. Its local publication boundary is a trusted directory with static
+symlink containment and normal-concurrency no-clobber through POSIX hard links;
+it does not claim resistance to a same-user malicious ancestor swap. Each Bronze
+manifest carries the upstream URL, HTTP source metadata, content SHA-256,
+capture-end and logical-hour timestamps, and run metadata. Cloud publication
+must preserve the same immutable/no-clobber contract through its storage API.
+
 ### Streaming pipeline
 
 A producer consumes Wikimedia recent-change SSE events, applies the contract's
