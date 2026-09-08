@@ -44,6 +44,13 @@ verifies the newly published complete manifest.
 5. Execute through DuckDB and return the answer, SQL, sources, and execution
    metadata.
 
+The deterministic SQL boundary is implemented for a limited read-only SELECT
+subset, with catalog-name validation and independent input, time, memory, row,
+result-size, and concurrency limits. Unsupported syntax and over-budget queries
+fail without partial results. The SQL executor currently takes host-owned view
+bindings; manifest resolution, source-evidence results, and natural-language
+orchestration remain separate integration steps. See the [agent contract](../agent/README.md).
+
 ### Data operations
 
 1. Inspect pipeline runs, dataset freshness, schemas, and partition manifests.
