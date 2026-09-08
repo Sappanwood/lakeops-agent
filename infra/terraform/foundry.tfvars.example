@@ -1,0 +1,9 @@
+subscription_id = "00000000-0000-0000-0000-000000000000"
+location        = "japaneast"
+environment     = "dev"
+resource_prefix = "lakeops"
+
+foundry = {
+  account_name = "lakeops-foundry-change-me"
+  capacity     = 10
+}

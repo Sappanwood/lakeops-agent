@@ -61,9 +61,12 @@ tests/               Cross-component and acceptance tests
 
 ## Infrastructure
 
-Terraform targets Azure Japan East by default. The initial configuration creates
-only a resource group; service modules will be added with the implementation so
-that infrastructure remains reviewable and deployable in small increments.
+Terraform targets Azure Japan East by default. The default configuration creates
+only a resource group. An opt-in Foundry configuration prepares the pinned
+`gpt-5.6-luna` deployment, Entra-only model access, and the agent's managed
+identity with account-scoped inference RBAC. See the
+[Terraform runbook](infra/terraform/README.md) for mocked plan tests, subscription
+prerequisites, connection settings, and teardown.
 
 ```bash
 cd infra/terraform

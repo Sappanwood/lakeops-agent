@@ -45,6 +45,24 @@ flowchart LR
 
 ## Deployment units
 
+### Foundry model infrastructure
+
+Terraform can opt into an `AIServices` account and a `lakeops-chat` deployment
+using `gpt-5.6-luna` version `2026-07-09`, `GlobalStandard`, and `NoAutoUpgrade`.
+The account's public endpoint requires Entra authentication; API-key access is
+disabled. A distinct user-assigned agent identity receives the account-scoped
+`Cognitive Services OpenAI User` role and will be attached to the future
+Container App. The Foundry account also has its own system identity. This does
+not deploy the agent runtime or implement model calls.
+
+Model infrastructure is absent when the `foundry` Terraform input is null.
+Capacity is constrained to 1,000-10,000 TPM and does not represent a spending
+limit. Japan East is the resource region; Global Standard processing is global.
+Provider registration and soft-delete purge are explicit lifecycle decisions,
+not automatic provider side effects. The
+[Terraform runbook](../infra/terraform/README.md) describes the reviewed model
+configuration and subscription prerequisites.
+
 ### Web application
 
 The React application presents chat, generated SQL, query sources, pipeline

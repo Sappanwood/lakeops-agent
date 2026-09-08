@@ -82,7 +82,14 @@ Run the gates relevant to the changed component. The initial repository supports
 ```bash
 uv run python -m unittest discover -s tests
 terraform fmt -check -recursive infra/terraform
+terraform -chdir=infra/terraform init -backend=false -lockfile=readonly
+terraform -chdir=infra/terraform validate
+terraform -chdir=infra/terraform test
 ```
+
+Terraform tests use mocked providers and plan-only runs; they require no Azure
+credentials and must never provision cloud resources. Live plan/apply workflows
+follow `infra/terraform/README.md` and require a confirmed target subscription.
 
 As application packages are introduced, their lint, type-check, unit, integration,
 and evaluation commands must be added here in the same change.

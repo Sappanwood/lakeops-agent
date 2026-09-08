@@ -3,7 +3,8 @@
 ## Scope and pricing date
 
 This estimate models a personal portfolio deployment in Azure Japan East using
-public pay-as-you-go retail prices observed on 2026-09-01. It is not a quote.
+public pay-as-you-go retail prices observed on 2026-09-01, with the model pricing
+updated from Microsoft's published GPT-5.6 rates on 2026-09-08. It is not a quote.
 Enterprise agreements, taxes, currency conversion, preview billing, free grants,
 and future price changes can alter the result.
 
@@ -31,13 +32,27 @@ endpoints, premium support, and production redundancy.
 | Container Registry Basic | $5.07 | $5.07 | $5.07 | $0.1666/day |
 | ADLS Gen2 Hot LRS | $0.50-1 | $1-2 | $2-4 | First-tier storage is about $0.02/GiB-month plus operations |
 | Application Insights | $0-5 | $0-8 | $0-20 | Depends on sampled log volume; Japan East analytics ingestion is $3.34/GiB after allowances |
-| Foundry model calls | About $3.60 | About $3.60 | About $14.40 | Example GPT-4.1 mini global rates: $0.40/M input and $1.60/M output tokens |
+| Foundry model calls | About $2.20 | About $2.20 | About $8.80 | GPT-5.6 Luna Global Standard short-context rates: $0.20/M input and $1.20/M output tokens |
 | **Estimated total** | **$10-20/month** | **$20-40/month** | **$45-90/month** | Rounded planning range |
 
 The low end assumes the Azure subscription still has the relevant Container Apps
 and monitoring free grants available. Free grants are shared at subscription
 scope and may already be consumed by other projects. The agent has no separate
 hosted-runtime charge because FastAPI and LangGraph share one Container App.
+
+The model estimate uses `5 * $0.20 + 1 * $1.20 = $2.20` for the public demo and
+four times that token volume for continuous streaming. It assumes uncached
+short-context input, no explicit cache writes, and all billable output (including
+reasoning) counted in the output budget. Long-context requests and cache writes
+have different pricing; these estimates do not cover them. Confirm the actual
+subscription's rates before deployment. The existing rounded total ranges retain
+headroom and are not a separately verified bill for the new configuration.
+
+The Foundry-only Terraform preparation does not provision the other resources
+in this table. It uses Global Standard rather than provisioned throughput. Its
+1-10 capacity units constrain throughput (1,000-10,000 TPM), not monthly spend;
+budget alerts and application token limits remain necessary for a live demo.
+The default null `foundry` input does not provision model resources.
 
 The daily batch processes roughly 1-2 GB of compressed public Pageviews input
 before Parquet transformation. The 25 GiB public-demo storage assumption therefore
@@ -105,3 +120,4 @@ additional margin for the API and jobs.
 - [Azure Data Lake Storage pricing](https://azure.microsoft.com/pricing/details/storage/data-lake/)
 - [Azure Monitor pricing](https://azure.microsoft.com/pricing/details/monitor/)
 - [Azure OpenAI pricing](https://azure.microsoft.com/pricing/details/azure-openai/)
+- [Microsoft GPT-5.6 pricing announcement](https://azure.microsoft.com/en-us/blog/gpt-5-6-now-available-in-microsoft-foundry/)
