@@ -37,8 +37,9 @@ validation, bounded Wikimedia fixtures, immutable Bronze Pageviews ingestion,
 local Silver Parquet normalization, complete-day Gold traffic metrics, and a
 catalog-bound local DuckDB query API. A separate deterministic SQL boundary now
 validates a limited SELECT subset and executes it in a resource-limited worker
-using trusted host view bindings; model and manifest-evidence integration remain
-planned. A single local command now coordinates
+using trusted host view bindings. The manifest adapter now binds accepted Gold
+and fixture-freshness evidence and returns SQL, source lineage, partition identity,
+and resource-policy results. Model integration remains planned. A single local command now coordinates
 Bronze through Gold and publishes a checksum-bound batch manifest only after all
 stage evidence is durable and validated. Committed fixture scenarios also publish
 freshness evidence that distinguishes a 23/24 missing-hour incident from a

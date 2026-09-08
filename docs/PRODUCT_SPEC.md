@@ -47,9 +47,11 @@ verifies the newly published complete manifest.
 The deterministic SQL boundary is implemented for a limited read-only SELECT
 subset, with catalog-name validation and independent input, time, memory, row,
 result-size, and concurrency limits. Unsupported syntax and over-budget queries
-fail without partial results. The SQL executor currently takes host-owned view
-bindings; manifest resolution, source-evidence results, and natural-language
-orchestration remain separate integration steps. See the [agent contract](../agent/README.md).
+fail without partial results. The manifest-bound SQL adapter now resolves host-selected accepted traffic or
+fixture-freshness inputs and returns source-evidence results. Valid empty results,
+missing completeness evidence, unavailable views, explicit required-partition
+mismatches, and execution failures remain distinguishable. Natural-language
+orchestration remains planned. See the [agent contract](../agent/README.md).
 
 ### Data operations
 
@@ -65,8 +67,9 @@ The batch path discovers and downloads 24 hourly pageview files for a UTC day,
 records source provenance and checksums, validates and normalizes the four-field
 source format, writes immutable Bronze evidence and Silver Parquet objects, then computes
 the catalog-defined daily project-traffic KPI only after all 24 accepted hours
-succeed. Governed queries can select only catalog-registered views and fields;
-they cannot supply SQL or storage paths.
+succeed. The batch field-query API selects only catalog-registered views and fields.
+The agent SQL adapter accepts validated SELECT SQL against those governed views;
+storage paths and binding definitions are always selected by the host.
 
 For the missing-hour demonstration, the committed bounded fixture produces
 governed freshness evidence with 23 accepted objects out of 24 expected. It

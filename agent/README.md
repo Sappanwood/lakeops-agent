@@ -1,6 +1,6 @@
 # Agent
 
-`query_safety.py` implements the deterministic generated-SQL boundary. The
+`query_safety.py` implements the deterministic generated-SQL boundary. `query_adapter.py` integrates accepted local manifests and source evidence. The
 LangGraph workflow, typed tools, state model, and operation approval transitions
 remain planned. The graph will be independent of HTTP transport and loaded by
 FastAPI under `apps/api/`.
@@ -27,7 +27,7 @@ values. Both fields are **trusted host inputs**, never tool arguments exposed to
 the model: `query` is the host-generated SELECT defining the view and
 `scan_bytes` is the full byte size of its accepted bound input objects. The
 executor creates only referenced views in a fresh in-memory DuckDB instance.
-The manifest-binding and source-evidence adapter is a separate integration layer;
+The manifest-binding and source-evidence adapter described below is the integration layer;
 this low-level API does not itself validate manifests, storage paths, catalog
 files, or view definitions. The existing batch view/field API remains separate.
 
@@ -85,3 +85,54 @@ The AST integration follows [SQLGlot's parser and expression API](https://sqlglo
 Runtime settings follow [DuckDB configuration](https://duckdb.org/docs/current/configuration/overview)
 and [Python client fetch APIs](https://duckdb.org/docs/current/clients/python/reference/).
 The worker cap uses [Python's POSIX resource API](https://docs.python.org/3/library/resource.html).
+
+## Manifest-bound SQL adapter
+
+The host creates one `GovernedSqlAdapter(manifest, destination, catalog_path=...,
+limits=QueryLimits(), required_partition_date=None)` and exposes only
+`execute(sql)` to the future agent tool. All constructor arguments are trusted
+host configuration. The adapter loads validated catalog metadata once, shares
+its executor across calls, and revalidates the selected immutable manifest,
+Parquet checksums, physical schemas, row counts, and Silver lineage on each call.
+Catalog changes require a new adapter. View projections and manifest acceptance
+use the existing Gold module's shared implementation. The two supported view
+bindings require their declared single input dataset and no joins; unsupported
+input or join changes fail closed even when the catalog is structurally valid.
+Catalog field subsets remain the projection authority.
+
+A traffic manifest binds only `v_project_traffic_daily`; fixture-freshness evidence
+binds only `v_ingestion_freshness`. Other registered views remain unavailable.
+There is no model-supplied path, binding SQL, direct Parquet, or arbitrary dataset
+input. The local boundary assumes trusted directories, static symlink containment,
+and immutable publications; same-user malicious ancestor replacement is outside
+scope. The adapter creates no query files or temporary directories.
+
+`GovernedSqlResult` includes canonical SQL, referenced views, columns, complete
+bounded rows, row count, source dataset identities, manifest-relative paths and
+SHA-256 digests, manifest IDs, partition dates, data status, total adapter elapsed
+time, executor elapsed time, and a passed resource-policy outcome with the exact
+limits and conservative admitted input bytes. Traffic evidence also includes its
+validated Silver manifest lineage. Input admission counts queried Gold objects;
+Silver lineage verification is not query scan I/O.
+
+`data_status` is `complete` or `missing` from accepted completeness evidence,
+even when a filter returns zero rows. A 23/24 fixture can therefore produce a
+successful diagnostic query marked `missing`. It never creates partial traffic.
+The optional host `required_partition_date` rejects a different bound partition
+with `stale_data`; it is an explicit partition requirement, not a wall-clock SLA
+or a claim that historical fixtures are expired. No lag timestamps are invented.
+Without that requirement, completeness does not assert recency.
+
+`QueryAdapterError.code` distinguishes `missing_data` (absent selected manifest),
+`stale_data`, `view_unavailable`, existing manifest/checksum/containment errors,
+and the executor's SQL, resource, and execution failures. Invalid fixture scenarios
+are mapped to sanitized `invalid_freshness_manifest` errors. Missing referenced
+objects retain the existing manifest-join error. Errors have sanitized messages
+and no rows; valid empty rows remain successful results with source evidence.
+The worker limits cover SQL execution; trusted host manifest reads, hashing, and
+existing physical validation happen before executor admission and are reflected
+only in total adapter elapsed time. They are not covered by worker resource caps.
+
+`tests/test_query_adapter.py` covers real fixture and Gold answers, lineage,
+empty/missing/stale distinctions, invalid catalog and changed evidence, static
+path containment, rejected access, execution failures, and row/byte/input limits.

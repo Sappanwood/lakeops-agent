@@ -146,8 +146,12 @@ The query tool registers only views described by the version-controlled dataset
 catalog. Model-generated storage paths and arbitrary `read_parquet` calls are not
 accepted. `agent/query_safety.py` now validates a limited SELECT AST with
 SQLGlot and regenerates accepted SQL before execution. A service-owned executor
-uses trusted catalog names and host-built view bindings; it does not yet resolve
-manifests or assemble source evidence. Every call revalidates SQL independently
+uses trusted catalog names and host-built view bindings. `agent/query_adapter.py`
+now resolves host-selected accepted Gold or fixture-freshness manifests through
+the existing Gold validators and shared view projections, attaching checksummed
+manifest identities, partition dates, Silver lineage, completeness status, timing,
+row counts, and the applied resource policy. Its optional host-selected required
+partition rejects mismatches as stale data without inventing wall-clock freshness. Every call revalidates SQL independently
 of model output.
 
 Execution uses a fresh spawned POSIX worker with a 128 MiB DuckDB buffer budget,

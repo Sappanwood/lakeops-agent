@@ -278,6 +278,15 @@ def _load_contract(catalog_path: Path) -> _Contract:
     required_views = {"v_project_traffic_daily", "v_page_activity_hourly", "v_page_traffic_activity", "v_ingestion_freshness", "v_pipeline_runs"}
     if set(views) != required_views:
         raise GoldMaterializationError("catalog_contract_failure", "query surface differs from the supported governed views")
+    for view_name, dataset_id in (
+        ("v_project_traffic_daily", "project_traffic_daily"),
+        ("v_ingestion_freshness", "ingestion_freshness"),
+    ):
+        view = views[view_name]
+        if view["inputs"] != [dataset_id] or view["joins"] != []:
+            raise GoldMaterializationError(
+                "catalog_contract_failure", "view inputs or joins differ from the supported binding",
+            )
     project_daily_kpi = next((item for item in metadata["kpis"] if item["id"] == PROJECT_DAILY_KPI_ID), None)
     if (
         not isinstance(project_daily_kpi, Mapping)
@@ -540,19 +549,28 @@ def _register_catalog_views(
     silver: _SilverInput | None,
     freshness: Path | None,
 ) -> dict[str, bool]:
-    availability = {name: False for name in contract.views}
+    queries = _catalog_view_queries(contract, gold, silver, freshness)
+    for name, query in queries.items():
+        connection.execute(f"CREATE VIEW {_sql_identifier(name)} AS {query}")
+    return {name: name in queries for name in contract.views}
+
+
+def _catalog_view_queries(
+    contract: _Contract,
+    gold: Path | None,
+    silver: _SilverInput | None,
+    freshness: Path | None,
+) -> dict[str, str]:
+    """Share the catalog projection between field queries and isolated SQL queries."""
+
+    inputs = {}
     if gold is not None and silver is not None:
-        traffic = _read_parquet_sql([gold])
-        fields = contract.views["v_project_traffic_daily"]["fields"]
-        connection.execute(f"CREATE VIEW v_project_traffic_daily AS SELECT {_field_projection(fields, traffic)} FROM {traffic}")
-        availability["v_project_traffic_daily"] = True
+        inputs["v_project_traffic_daily"] = gold
     if freshness is not None:
-        source = _read_parquet_sql([freshness])
-        fields = contract.views["v_ingestion_freshness"]["fields"]
-        connection.execute(f"CREATE VIEW v_ingestion_freshness AS SELECT {_field_projection(fields, source)} FROM {source}")
-        availability["v_ingestion_freshness"] = True
+        inputs["v_ingestion_freshness"] = freshness
     return {
-        name: availability.get(name, False) for name in contract.views
+        name: f"SELECT {_field_projection(contract.views[name]['fields'], '')} FROM {_read_parquet_sql([path])}"
+        for name, path in inputs.items()
     }
 
 
