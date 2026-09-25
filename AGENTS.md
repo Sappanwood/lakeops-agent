@@ -46,23 +46,19 @@ limits, or pricing assumptions, verify the current official documentation:
 | [docs/COST_MODEL.md](docs/COST_MODEL.md) | Estimating or changing deployed Azure resources | Pricing date, resource sizing, operating mode, or service selection changes |
 | [infra/terraform/README.md](infra/terraform/README.md) | Provisioning or changing Azure infrastructure | Provider, state, deployment, or teardown behavior changes |
 
-## Project operations
+## Project operations and dormant status
 
-The managed workspace project ID is `lakeops-agent`. Within a Workspace Control
-environment, resolve the project through the active Catalog and use only the
-returned `ops_root` and typed artifact roots. Process artifacts belong only in
-those resolved roots, outside this public repository.
+This project is dormant as of 2026-09-25 and is not registered in the active ProjectOps manifest.
+Keep its code and historical artifacts in place. Read-only inspection does not authorize restarting
+services or resuming the old backlog.
 
-Resolve the project first, then use the returned exact `backlog/store@1` root:
+When the user selects a concrete restart scope, follow the Workspace AGENTS.md to register the
+project in ProjectOps, update these instructions, and create only the newly agreed work. Do not
+import or continue writing the old Workspace Control backlog. Explicit historical queries may
+use the archived Catalog resolver described in the Workspace instructions.
 
-```bash
-/home/ling/workspace/workspace-control/bin/workspace project resolve lakeops-agent \
-  --catalog /home/ling/workspace/workspace-control/catalog/workspace.json --json
-backlog --store <resolved-artifacts.backlog.root> <command> --json
-```
-
-Architecture decisions are private Project Ops records. Public, currently valid
-facts must remain self-contained in this repository's documentation.
+Architecture decisions remain process records. Current public facts must stay self-contained
+in this repository's documentation.
 
 ## Development conventions
 
